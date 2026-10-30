@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import HeroSlider from "../components/HeroSlider";
+import HowItWorks from "@/components/HowItWorks";
 
 export default function Home() {
   return (
@@ -30,6 +31,8 @@ export default function Home() {
       >
         <HeroSlider />
       </Suspense>
+      <HowItWorks></HowItWorks>
     </main>
+    
   );
 }
