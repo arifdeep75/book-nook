@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import HeroSlider from "../components/HeroSlider";
 import HowItWorks from "@/components/HowItWorks";
 import Categories from "@/components/Categories";
+import Reviews from "@/components/Reviews";
 
 export default function Home() {
   return (
@@ -34,6 +35,7 @@ export default function Home() {
       </Suspense>
       <HowItWorks></HowItWorks>
       <Categories></Categories>
+      <Reviews></Reviews>
     </main>
     
   );
