@@ -4,7 +4,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
-import { useRef, useState } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
@@ -20,6 +20,8 @@ import { authClient } from "@/lib/auth-client";
 const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
 
+type SocialProvider = "google" | "github";
+
 export default function SignupPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -29,11 +31,36 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [socialLoading, setSocialLoading] =
+    useState<SocialProvider | null>(null);
+
+  // Google and GitHub Signup
+  const handleSocialSignup = async (provider: SocialProvider) => {
+    if (loading || socialLoading) return;
+
+    try {
+      setSocialLoading(provider);
+
+      const { error } = await authClient.signIn.social({
+        provider,
+        callbackURL: "/",
+      });
+
+      if (error) {
+        toast.error(
+          error.message || `Failed to sign up with ${provider}.`
+        );
+        setSocialLoading(null);
+      }
+    } catch (error) {
+      console.error(`${provider} signup error:`, error);
+      toast.error("Something went wrong. Please try again.");
+      setSocialLoading(null);
+    }
+  };
 
   // Handle profile image selection
-  const handleImageChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
 
     if (!file) return;
@@ -72,13 +99,11 @@ export default function SignupPage() {
     }
   };
 
-  // Signup handler
-  const handleSubmit = async (
-    e: React.FormEvent<HTMLFormElement>
-  ) => {
+  // Email and Password Signup
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (loading) return;
+    if (loading || socialLoading) return;
 
     const formData = new FormData(e.currentTarget);
 
@@ -87,7 +112,6 @@ export default function SignupPage() {
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
-    // Validate passwords
     if (password !== confirmPassword) {
       toast.error("Passwords do not match.");
       return;
@@ -119,61 +143,51 @@ export default function SignupPage() {
         return;
       }
 
-      // Step 2: Upload profile picture to backend
+      // Step 2: Upload profile picture
       if (imageFile) {
         const uploadData = new FormData();
         uploadData.append("image", imageFile);
 
-        const uploadResponse = await fetch(
-          `${SERVER_URL}/upload`,
-          {
-            method: "POST",
-            body: uploadData,
-          }
-        );
+        const uploadResponse = await fetch(`${SERVER_URL}/upload`, {
+          method: "POST",
+          body: uploadData,
+        });
 
         const uploadResult = await uploadResponse.json();
 
         if (!uploadResponse.ok || !uploadResult.success) {
           console.error("Image upload failed:", uploadResult);
-
           toast.error(
             "Account created, but profile picture upload failed."
           );
-
           router.push("/");
           router.refresh();
           return;
         }
 
-        // Step 3: Save uploaded image URL to Better Auth
+        // Step 3: Save image URL to Better Auth
         const { error: updateError } = await authClient.updateUser({
           image: uploadResult.imageUrl,
         });
 
         if (updateError) {
           console.error("Profile image update failed:", updateError);
-
           toast.error(
             "Account created, but profile picture could not be saved."
           );
-
           router.push("/");
           router.refresh();
           return;
         }
       }
 
-      // Step 4: Signup completed
       if (profileImage) {
         URL.revokeObjectURL(profileImage);
       }
 
       toast.success("Account created successfully!");
-
       router.push("/");
       router.refresh();
-
     } catch (error) {
       console.error("Signup error:", error);
       toast.error("Something went wrong. Please try again.");
@@ -209,6 +223,78 @@ export default function SignupPage() {
           <p className="mt-1.5 text-sm text-gray-500">
             Join our community of book lovers.
           </p>
+        </div>
+
+        {/* Social Signup */}
+        <div className="space-y-3">
+
+          {/* Google */}
+          <button
+            type="button"
+            onClick={() => handleSocialSignup("google")}
+            disabled={loading || socialLoading !== null}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg
+              viewBox="0 0 48 48"
+              className="h-5 w-5"
+              aria-hidden="true"
+            >
+              <path
+                fill="#EA4335"
+                d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z"
+                transform="translate(0 6)"
+              />
+              <path
+                fill="#4285F4"
+                d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.73 7.18l7.62 5.91c4.45-4.11 7.15-10.16 7.15-17.56Z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M10.53 28.59A14.4 14.4 0 0 1 9.75 24c0-1.59.27-3.13.76-4.59l-7.98-6.19A23.9 23.9 0 0 0 0 24c0 3.87.93 7.54 2.56 10.78l7.97-6.19Z"
+              />
+              <path
+                fill="#34A853"
+                d="M24 48c6.48 0 11.93-2.14 15.9-5.89l-7.62-5.91c-2.11 1.41-4.81 2.25-8.28 2.25-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z"
+              />
+            </svg>
+
+            {socialLoading === "google"
+              ? "Connecting..."
+              : "Continue with Google"}
+          </button>
+
+          {/* GitHub */}
+          <button
+            type="button"
+            onClick={() => handleSocialSignup("github")}
+            disabled={loading || socialLoading !== null}
+            className="flex w-full items-center justify-center gap-3 rounded-lg border border-gray-200 py-2.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-5 w-5"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M12 .5a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.05c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.33-1.76-1.33-1.76-1.09-.75.08-.74.08-.74 1.2.08 1.83 1.23 1.83 1.23 1.07 1.83 2.8 1.3 3.49.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.34-5.47-5.95 0-1.31.47-2.38 1.23-3.22-.12-.3-.53-1.52.12-3.17 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.29-1.55 3.29-1.23 3.29-1.23.66 1.65.25 2.87.13 3.17.77.84 1.23 1.91 1.23 3.22 0 4.62-2.8 5.64-5.48 5.94.43.37.81 1.1.81 2.22v3.3c0 .32.22.69.83.57A12 12 0 0 0 12 .5Z" />
+            </svg>
+
+            {socialLoading === "github"
+              ? "Connecting..."
+              : "Continue with GitHub"}
+          </button>
+        </div>
+
+        {/* Divider */}
+        <div className="my-6 flex items-center gap-3">
+          <div className="h-px flex-1 bg-gray-200" />
+
+          <span className="text-xs text-gray-400">
+            OR SIGN UP WITH EMAIL
+          </span>
+
+          <div className="h-px flex-1 bg-gray-200" />
         </div>
 
         {/* Profile Picture */}
@@ -277,7 +363,7 @@ export default function SignupPage() {
           </p>
         </div>
 
-        {/* Sign Up Form */}
+        {/* Email Signup Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
 
           {/* Full Name */}
@@ -401,7 +487,7 @@ export default function SignupPage() {
           {/* Submit */}
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || socialLoading !== null}
             className="w-full rounded-lg bg-[#1c352b] py-2.5 text-sm font-semibold text-white transition hover:bg-[#294b3c] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {loading ? "Creating account..." : "Create Account"}
@@ -418,6 +504,7 @@ export default function SignupPage() {
             Sign in
           </Link>
         </p>
+
       </div>
     </main>
   );
