@@ -4,32 +4,28 @@
 import Link from "next/link";
 import Image from "next/image";
 import { toast } from "sonner";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
-  Camera,
   Eye,
   EyeOff,
-  ImagePlus,
-  Trash2,
+  ImageIcon,
   UserRound,
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-
-const SERVER_URL =
-  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
 
 type SocialProvider = "google" | "github";
 
 export default function SignupPage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [profileImage, setProfileImage] = useState<string | null>(null);
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageError, setImageError] = useState(false);
+
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
   const [loading, setLoading] = useState(false);
   const [socialLoading, setSocialLoading] =
     useState<SocialProvider | null>(null);
@@ -59,43 +55,19 @@ export default function SignupPage() {
     }
   };
 
-  // Handle profile image selection
-  const handleImageChange = (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  // Validate image URL
+  const validateImageUrl = (url: string) => {
+    if (!url.trim()) return true;
 
-    if (!file) return;
+    try {
+      const parsedUrl = new URL(url.trim());
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please select a valid image.");
-      e.target.value = "";
-      return;
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Image size must be less than 5MB.");
-      e.target.value = "";
-      return;
-    }
-
-    if (profileImage) {
-      URL.revokeObjectURL(profileImage);
-    }
-
-    setImageFile(file);
-    setProfileImage(URL.createObjectURL(file));
-  };
-
-  // Remove selected profile image
-  const removeImage = () => {
-    if (profileImage) {
-      URL.revokeObjectURL(profileImage);
-    }
-
-    setProfileImage(null);
-    setImageFile(null);
-
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+      return (
+        parsedUrl.protocol === "http:" ||
+        parsedUrl.protocol === "https:"
+      );
+    } catch {
+      return false;
     }
   };
 
@@ -107,10 +79,17 @@ export default function SignupPage() {
 
     const formData = new FormData(e.currentTarget);
 
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
+    const name = (formData.get("name") as string).trim();
+    const email = (formData.get("email") as string)
+      .trim()
+      .toLowerCase();
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
+
+    if (!name) {
+      toast.error("Please enter your name.");
+      return;
+    }
 
     if (password !== confirmPassword) {
       toast.error("Passwords do not match.");
@@ -122,75 +101,68 @@ export default function SignupPage() {
       return;
     }
 
+    const trimmedImageUrl = imageUrl.trim();
+
+    if (!validateImageUrl(trimmedImageUrl)) {
+      toast.error("Please enter a valid image URL.");
+      return;
+    }
+
+    if (trimmedImageUrl && imageError) {
+      toast.error("Please enter a working image URL.");
+      return;
+    }
+
     try {
       setLoading(true);
 
       // Step 1: Create user account
       const { data, error } = await authClient.signUp.email({
-        name: name.trim(),
-        email: email.trim().toLowerCase(),
+        name,
+        email,
         password,
         callbackURL: "/",
       });
 
       if (error) {
-        toast.error(error.message || "Failed to create account.");
-        return;
+        throw new Error(error.message || "Failed to create account.");
       }
 
       if (!data) {
-        toast.error("Account creation failed.");
-        return;
+        throw new Error("Account creation failed.");
       }
 
-      // Step 2: Upload profile picture
-      if (imageFile) {
-        const uploadData = new FormData();
-        uploadData.append("image", imageFile);
-
-        const uploadResponse = await fetch(`${SERVER_URL}/upload`, {
-          method: "POST",
-          body: uploadData,
-        });
-
-        const uploadResult = await uploadResponse.json();
-
-        if (!uploadResponse.ok || !uploadResult.success) {
-          console.error("Image upload failed:", uploadResult);
-          toast.error(
-            "Account created, but profile picture upload failed."
-          );
-          router.push("/");
-          router.refresh();
-          return;
-        }
-
-        // Step 3: Save image URL to Better Auth
+      // Step 2: Save profile image URL to Better Auth
+      if (trimmedImageUrl) {
         const { error: updateError } = await authClient.updateUser({
-          image: uploadResult.imageUrl,
+          image: trimmedImageUrl,
         });
 
         if (updateError) {
           console.error("Profile image update failed:", updateError);
+
           toast.error(
             "Account created, but profile picture could not be saved."
           );
+
           router.push("/");
           router.refresh();
           return;
         }
       }
 
-      if (profileImage) {
-        URL.revokeObjectURL(profileImage);
-      }
-
       toast.success("Account created successfully!");
+
       router.push("/");
       router.refresh();
     } catch (error) {
       console.error("Signup error:", error);
-      toast.error("Something went wrong. Please try again.");
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setLoading(false);
     }
@@ -297,70 +269,61 @@ export default function SignupPage() {
           <div className="h-px flex-1 bg-gray-200" />
         </div>
 
-        {/* Profile Picture */}
+        {/* Profile Picture URL */}
         <div className="mb-6 flex flex-col items-center">
-          <div className="relative">
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-[#e9eee9] bg-[#edf1ed]">
-              {profileImage ? (
-                <Image
-                  src={profileImage}
-                  alt="Profile preview"
-                  width={96}
-                  height={96}
-                  unoptimized
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <UserRound
-                  size={42}
-                  className="text-[#1c352b]/60"
-                />
-              )}
-            </div>
 
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              aria-label="Upload profile picture"
-              className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-[#1c352b] text-white transition hover:bg-[#294b3c]"
-            >
-              <Camera size={15} />
-            </button>
-          </div>
-
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleImageChange}
-            className="hidden"
-          />
-
-          <div className="mt-3 flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="flex items-center gap-1.5 text-sm font-medium text-[#1c352b] hover:underline"
-            >
-              <ImagePlus size={15} />
-              {profileImage ? "Change photo" : "Upload photo"}
-            </button>
-
-            {profileImage && (
-              <button
-                type="button"
-                onClick={removeImage}
-                className="flex items-center gap-1 text-sm text-red-500 hover:underline"
-              >
-                <Trash2 size={14} />
-                Remove
-              </button>
+          {/* Image Preview */}
+          <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-full border-4 border-[#e9eee9] bg-[#edf1ed]">
+            {imageUrl.trim() && !imageError ? (
+              <Image
+                src={imageUrl.trim()}
+                alt="Profile preview"
+                width={96}
+                height={96}
+                unoptimized
+                className="h-full w-full object-cover"
+                onError={() => setImageError(true)}
+              />
+            ) : (
+              <UserRound
+                size={42}
+                className="text-[#1c352b]/60"
+              />
             )}
           </div>
 
-          <p className="mt-1.5 text-xs text-gray-400">
-            Optional · JPG, PNG · Maximum 5MB
+          <label
+            htmlFor="imageUrl"
+            className="mt-4 flex items-center gap-1.5 text-sm font-medium text-[#1c352b]"
+          >
+            <ImageIcon size={16} />
+            Profile Picture URL
+            <span className="font-normal text-gray-400">
+              (Optional)
+            </span>
+          </label>
+
+          <input
+            id="imageUrl"
+            type="url"
+            value={imageUrl}
+            onChange={(e) => {
+              setImageUrl(e.target.value);
+              setImageError(false);
+            }}
+            placeholder="https://example.com/profile.jpg"
+            className="mt-2 w-full rounded-lg border border-gray-200 px-3.5 py-2.5 text-sm outline-none transition focus:border-[#1c352b] focus:ring-2 focus:ring-[#1c352b]/10"
+          />
+
+          <p className="mt-1.5 text-center text-xs text-gray-400">
+            Paste a direct image URL (JPG, PNG or WebP).
           </p>
+
+          {imageError && imageUrl.trim() && (
+            <p className="mt-2 text-xs text-red-500">
+              Could not load this image. Please check the URL.
+            </p>
+          )}
         </div>
 
         {/* Email Signup Form */}
