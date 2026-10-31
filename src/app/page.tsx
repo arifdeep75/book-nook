@@ -1,8 +1,10 @@
+
 import { Suspense } from "react";
 import HeroSlider from "../components/HeroSlider";
 import HowItWorks from "@/components/HowItWorks";
 import Categories from "@/components/Categories";
 import Reviews from "@/components/Reviews";
+import NewArrivals from "@/components/NewArrivals";
 
 export default function Home() {
   return (
@@ -33,10 +35,14 @@ export default function Home() {
       >
         <HeroSlider />
       </Suspense>
-      <HowItWorks></HowItWorks>
-      <Categories></Categories>
-      <Reviews></Reviews>
+
+      <NewArrivals></NewArrivals>
+
+      <HowItWorks />
+
+      <Categories />
+
+      <Reviews />
     </main>
-    
   );
 }
