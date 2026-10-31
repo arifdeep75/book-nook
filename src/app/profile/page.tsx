@@ -1,227 +1,285 @@
+
 "use client";
-import { Camera, UserRound } from "lucide-react";
-import { useRef, useState } from "react";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  BookOpen,
+  Camera,
   UserRound,
   Mail,
   CalendarDays,
-  Camera,
-  Save,
+  BookOpen,
   LogOut,
+  Save,
+  Loader2,
   ArrowLeft,
-  BookMarked,
 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 
+const SERVER_URL =
+  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
+
 export default function ProfilePage() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { data: session, isPending, refetch } = authClient.useSession();
+  const { data: session, isPending, refetch } =
+    authClient.useSession();
+
   const user = session?.user;
 
   const [name, setName] = useState("");
-  const [image, setImage] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState(user?.image || "");
+  const [isSaving, setIsSaving] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (user) {
       setName(user.name || "");
-      setImage(user.image || "");
+      setImagePreview(user.image || "");
     }
   }, [user]);
 
   useEffect(() => {
-    if (!isPending && !session) {
+    return () => {
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
+  useEffect(() => {
+    if (!isPending && !user) {
       router.replace("/login");
     }
-  }, [isPending, session, router]);
+  }, [isPending, user, router]);
 
-  const handleSave = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  // Select profile picture
+  const handleImageChange = (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = event.target.files?.[0];
 
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      toast.error("Please select a valid image.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image size must be less than 5MB.");
+      event.target.value = "";
+      return;
+    }
+
+    if (imagePreview.startsWith("blob:")) {
+      URL.revokeObjectURL(imagePreview);
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+  };
+
+  // Upload image to backend
+  const uploadImage = async (file: File): Promise<string> => {
+    const formData = new FormData();
+
+    formData.append("image", file);
+
+    const response = await fetch(`${SERVER_URL}/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Image upload failed.");
+    }
+
+    return result.imageUrl;
+  };
+
+  // Save profile
+  const handleSave = async () => {
     if (!name.trim()) {
       toast.error("Name cannot be empty.");
       return;
     }
 
-    if (image.trim()) {
-      try {
-        new URL(image.trim());
-      } catch {
-        toast.error("Please enter a valid image URL.");
-        return;
-      }
-    }
+    setIsSaving(true);
 
     try {
-      setSaving(true);
+      let imageUrl = user?.image || "";
 
+      // Upload selected image first
+      if (imageFile) {
+        imageUrl = await uploadImage(imageFile);
+      }
+
+      // Update Better Auth user
       const { error } = await authClient.updateUser({
         name: name.trim(),
-        image: image.trim() || null,
+        ...(imageFile ? { image: imageUrl } : {}),
       });
 
       if (error) {
-        toast.error(error.message || "Failed to update profile.");
-        return;
+        throw new Error(error.message || "Profile update failed.");
       }
 
       await refetch();
+
+      setImageFile(null);
+
       toast.success("Profile updated successfully!");
     } catch (error) {
       console.error("Profile update error:", error);
-      toast.error("Something went wrong. Please try again.");
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong."
+      );
     } finally {
-      setSaving(false);
+      setIsSaving(false);
     }
   };
 
+  // Logout
   const handleLogout = async () => {
+    setIsLoggingOut(true);
+
     try {
-      setLoggingOut(true);
+      await authClient.signOut();
 
-      const { error } = await authClient.signOut();
-
-      if (error) {
-        toast.error(error.message || "Logout failed.");
-        return;
-      }
-
-      toast.success("Logged out successfully.");
-      router.push("/");
+      toast.success("Logged out successfully!");
+      router.replace("/");
       router.refresh();
-    } catch (error) {
-      console.error("Logout error:", error);
-      toast.error("Something went wrong.");
+    } catch {
+      toast.error("Logout failed.");
     } finally {
-      setLoggingOut(false);
+      setIsLoggingOut(false);
     }
   };
 
   if (isPending || !user) {
     return (
-      <main className="flex min-h-[70vh] items-center justify-center bg-background">
-        <div className="h-9 w-9 animate-spin rounded-full border-4 border-primary/20 border-t-primary" />
-      </main>
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Loader2 className="animate-spin" size={30} />
+      </div>
     );
   }
 
-  const joinedDate = user.createdAt
-    ? new Date(user.createdAt).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "Not available";
-
   return (
-    <main className="min-h-screen bg-background px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-4xl">
-        {/* Back */}
+    <main className="min-h-screen bg-background px-4 py-10">
+      <div className="mx-auto max-w-3xl">
+
+        {/* Back to Home */}
         <Link
           href="/"
-          className="mb-6 inline-flex items-center gap-2 text-sm font-medium text-muted-foreground transition hover:text-primary"
+          className="mb-8 inline-flex items-center gap-2 text-sm text-muted-foreground transition hover:text-primary"
         >
-          <ArrowLeft size={17} />
+          <ArrowLeft size={16} />
           Back to Home
         </Link>
 
-        {/* Heading */}
+        {/* Header */}
         <div className="mb-8">
-          <p className="text-sm font-semibold uppercase tracking-wider text-primary">
+          <p className="mb-2 text-sm font-medium uppercase tracking-widest text-primary">
             Account Settings
           </p>
-          <h1 className="mt-2 text-3xl font-bold text-foreground">
+
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
             My Profile
           </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Manage your personal information and account details.
+
+          <p className="mt-2 text-muted-foreground">
+            Manage your personal information and account.
           </p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-[280px_1fr]">
-          {/* Profile Card */}
-          <aside className="h-fit rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-            <div className="mx-auto flex h-28 w-28 items-center justify-center overflow-hidden rounded-full border-4 border-primary/10 bg-primary/5">
-              {image ? (
-                <img
-                  src={image}
-                  alt={user.name || "Profile"}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    e.currentTarget.style.display = "none";
-                  }}
+        {/* Profile Card */}
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+
+          {/* Cover */}
+          <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+
+          <div className="px-6 pb-8 sm:px-8">
+
+            {/* Avatar */}
+            <div className="-mt-14 mb-8 flex flex-col items-center sm:flex-row sm:items-end sm:gap-5">
+
+              <div className="relative">
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageChange}
                 />
-              ) : (
-                <UserRound size={48} className="text-primary/70" />
-              )}
-            </div>
 
-            <h2 className="mt-4 break-words text-lg font-bold text-foreground">
-              {user.name}
-            </h2>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isSaving}
+                  aria-label="Change profile picture"
+                  className="group relative h-28 w-28 overflow-hidden rounded-full border-4 border-card bg-muted shadow-md"
+                >
+                  {imagePreview ? (
+                    <img
+                      src={imagePreview}
+                      alt="Profile picture"
+                      className="h-full w-full object-cover"
+                      onError={() => setImagePreview("")}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <UserRound
+                        size={42}
+                        className="text-muted-foreground"
+                      />
+                    </div>
+                  )}
 
-            <p className="mt-1 break-all text-sm text-muted-foreground">
-              {user.email}
-            </p>
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/55 text-white opacity-0 transition group-hover:opacity-100">
+                    <Camera size={26} />
+                  </div>
+                </button>
 
-            <div className="mt-5 border-t border-border pt-5 text-left">
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <CalendarDays size={17} className="text-primary" />
-                <div>
-                  <p className="text-xs">Member since</p>
-                  <p className="mt-0.5 font-medium text-foreground">
-                    {joinedDate}
-                  </p>
-                </div>
+                <span className="absolute bottom-1 right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-card bg-primary text-primary-foreground">
+                  <Camera size={15} />
+                </span>
+              </div>
+
+              <div className="mt-3 text-center sm:mb-2 sm:mt-0 sm:text-left">
+                <h2 className="text-xl font-semibold">
+                  {user.name || "BookNook User"}
+                </h2>
+
+                <p className="text-sm text-muted-foreground">
+                  {user.email}
+                </p>
+
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Click your photo to change it
+                </p>
               </div>
             </div>
 
-            <Link
-              href="/my-books"
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-border px-4 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/5"
-            >
-              <BookMarked size={17} />
-              My Books
-            </Link>
+            {/* Profile Form */}
+            <div className="space-y-6">
 
-            <button
-              type="button"
-              onClick={handleLogout}
-              disabled={loggingOut}
-              className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-60"
-            >
-              <LogOut size={17} />
-              {loggingOut ? "Logging out..." : "Logout"}
-            </button>
-          </aside>
-
-          {/* Edit Profile */}
-          <section className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-            <div className="mb-6">
-              <h2 className="text-lg font-bold text-foreground">
-                Personal Information
-              </h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Update your profile details below.
-              </p>
-            </div>
-
-            <form onSubmit={handleSave} className="space-y-5">
-              {/* Full Name */}
+              {/* Name */}
               <div>
                 <label
                   htmlFor="name"
-                  className="mb-2 block text-sm font-semibold text-foreground"
+                  className="mb-2 block text-sm font-medium"
                 >
                   Full Name
                 </label>
@@ -229,7 +287,7 @@ export default function ProfilePage() {
                 <div className="relative">
                   <UserRound
                     size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                   />
 
                   <input
@@ -237,9 +295,8 @@ export default function ProfilePage() {
                     type="text"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Enter your full name"
-                    required
-                    className="w-full rounded-lg border border-border bg-background py-3 pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
+                    placeholder="Enter your name"
+                    className="w-full rounded-xl border border-border bg-background py-3 pl-10 pr-4 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
                   />
                 </div>
               </div>
@@ -248,7 +305,7 @@ export default function ProfilePage() {
               <div>
                 <label
                   htmlFor="email"
-                  className="mb-2 block text-sm font-semibold text-foreground"
+                  className="mb-2 block text-sm font-medium"
                 >
                   Email Address
                 </label>
@@ -256,7 +313,7 @@ export default function ProfilePage() {
                 <div className="relative">
                   <Mail
                     size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                   />
 
                   <input
@@ -264,86 +321,112 @@ export default function ProfilePage() {
                     type="email"
                     value={user.email}
                     disabled
-                    className="w-full cursor-not-allowed rounded-lg border border-border bg-muted py-3 pl-11 pr-4 text-sm text-muted-foreground outline-none"
+                    className="w-full cursor-not-allowed rounded-xl border border-border bg-muted py-3 pl-10 pr-4 text-sm text-muted-foreground outline-none"
                   />
                 </div>
 
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Your registered email address cannot be changed here.
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Email address cannot be changed here.
                 </p>
               </div>
 
-              {/* Profile Image URL */}
-              <div>
-                <label
-                  htmlFor="image"
-                  className="mb-2 block text-sm font-semibold text-foreground"
-                >
-                  Profile Picture URL
-                </label>
+              {/* Account Information */}
+              <div className="rounded-xl border border-border bg-background p-4">
+                <h3 className="mb-4 font-semibold">
+                  Account Information
+                </h3>
 
-                <div className="relative">
-                  <Camera
-                    size={18}
-                    className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <CalendarDays size={19} />
+                  </div>
 
-                  <input
-                    id="image"
-                    type="url"
-                    value={image}
-                    onChange={(e) => setImage(e.target.value)}
-                    placeholder="https://example.com/profile.jpg"
-                    className="w-full rounded-lg border border-border bg-background py-3 pl-11 pr-4 text-sm text-foreground outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/10"
-                  />
-                </div>
-
-                <p className="mt-1.5 text-xs text-muted-foreground">
-                  Add an image URL to set your profile picture.
-                </p>
-              </div>
-
-              {/* Image Preview */}
-              {image.trim() && (
-                <div className="flex items-center gap-3 rounded-lg border border-border bg-muted/30 p-3">
-                  <img
-                    src={image}
-                    alt="Profile preview"
-                    className="h-12 w-12 rounded-full border border-border object-cover"
-                    onError={(e) => {
-                      e.currentTarget.style.visibility = "hidden";
-                    }}
-                  />
                   <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Profile preview
+                    <p className="text-sm font-medium">
+                      Member Since
                     </p>
+
                     <p className="text-xs text-muted-foreground">
-                      This image will be used as your avatar.
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleDateString(
+                            "en-US",
+                            {
+                              day: "numeric",
+                              month: "long",
+                              year: "numeric",
+                            }
+                          )
+                        : "Not available"}
                     </p>
                   </div>
                 </div>
-              )}
-
-              {/* Save */}
-              <div className="border-t border-border pt-5">
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
-                >
-                  <Save size={17} />
-                  {saving ? "Saving Changes..." : "Save Changes"}
-                </button>
               </div>
-            </form>
-          </section>
+
+              {/* Save Button */}
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={isSaving || !name.trim()}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 py-3 font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Saving Changes...
+                  </>
+                ) : (
+                  <>
+                    <Save size={18} />
+                    Save Changes
+                  </>
+                )}
+              </button>
+
+            </div>
+          </div>
         </div>
 
-        {/* Footer */}
-        <div className="mt-8 flex items-center justify-center gap-2 text-sm text-muted-foreground">
-          <BookOpen size={16} className="text-primary" />
-          <span>BookNook — Your Little Corner of Books</span>
+        {/* Quick Links */}
+        <div className="mt-6 grid gap-4 sm:grid-cols-2">
+
+          <Link
+            href="/my-books"
+            className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 transition hover:border-primary/50"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <BookOpen size={21} />
+            </div>
+
+            <div>
+              <h3 className="font-semibold">My Books</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage your books
+              </p>
+            </div>
+          </Link>
+
+          <button
+            type="button"
+            onClick={handleLogout}
+            disabled={isLoggingOut}
+            className="flex items-center gap-4 rounded-xl border border-border bg-card p-5 text-left transition hover:border-red-500/50"
+          >
+            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-red-500/10 text-red-500">
+              {isLoggingOut ? (
+                <Loader2 size={21} className="animate-spin" />
+              ) : (
+                <LogOut size={21} />
+              )}
+            </div>
+
+            <div>
+              <h3 className="font-semibold">Logout</h3>
+              <p className="text-sm text-muted-foreground">
+                Sign out of your account
+              </p>
+            </div>
+          </button>
+
         </div>
       </div>
     </main>

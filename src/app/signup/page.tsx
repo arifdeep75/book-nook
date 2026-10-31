@@ -17,46 +17,65 @@ import {
 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 
+const SERVER_URL =
+  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
+
 export default function SignupPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profileImage, setProfileImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle profile image selection
+  const handleImageChange = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const file = e.target.files?.[0];
 
     if (!file) return;
 
     if (!file.type.startsWith("image/")) {
       toast.error("Please select a valid image.");
+      e.target.value = "";
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image size must be less than 5MB.");
+      e.target.value = "";
       return;
     }
 
-    if (profileImage) URL.revokeObjectURL(profileImage);
+    if (profileImage) {
+      URL.revokeObjectURL(profileImage);
+    }
 
+    setImageFile(file);
     setProfileImage(URL.createObjectURL(file));
   };
 
+  // Remove selected profile image
   const removeImage = () => {
-    if (profileImage) URL.revokeObjectURL(profileImage);
+    if (profileImage) {
+      URL.revokeObjectURL(profileImage);
+    }
 
     setProfileImage(null);
+    setImageFile(null);
 
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  // Signup handler
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
     e.preventDefault();
 
     if (loading) return;
@@ -68,6 +87,7 @@ export default function SignupPage() {
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
+    // Validate passwords
     if (password !== confirmPassword) {
       toast.error("Passwords do not match.");
       return;
@@ -81,6 +101,7 @@ export default function SignupPage() {
     try {
       setLoading(true);
 
+      // Step 1: Create user account
       const { data, error } = await authClient.signUp.email({
         name: name.trim(),
         email: email.trim().toLowerCase(),
@@ -93,14 +114,66 @@ export default function SignupPage() {
         return;
       }
 
-      if (data) {
-        toast.success("Account created successfully!");
-
-        if (profileImage) URL.revokeObjectURL(profileImage);
-
-        router.push("/");
-        router.refresh();
+      if (!data) {
+        toast.error("Account creation failed.");
+        return;
       }
+
+      // Step 2: Upload profile picture to backend
+      if (imageFile) {
+        const uploadData = new FormData();
+        uploadData.append("image", imageFile);
+
+        const uploadResponse = await fetch(
+          `${SERVER_URL}/upload`,
+          {
+            method: "POST",
+            body: uploadData,
+          }
+        );
+
+        const uploadResult = await uploadResponse.json();
+
+        if (!uploadResponse.ok || !uploadResult.success) {
+          console.error("Image upload failed:", uploadResult);
+
+          toast.error(
+            "Account created, but profile picture upload failed."
+          );
+
+          router.push("/");
+          router.refresh();
+          return;
+        }
+
+        // Step 3: Save uploaded image URL to Better Auth
+        const { error: updateError } = await authClient.updateUser({
+          image: uploadResult.imageUrl,
+        });
+
+        if (updateError) {
+          console.error("Profile image update failed:", updateError);
+
+          toast.error(
+            "Account created, but profile picture could not be saved."
+          );
+
+          router.push("/");
+          router.refresh();
+          return;
+        }
+      }
+
+      // Step 4: Signup completed
+      if (profileImage) {
+        URL.revokeObjectURL(profileImage);
+      }
+
+      toast.success("Account created successfully!");
+
+      router.push("/");
+      router.refresh();
+
     } catch (error) {
       console.error("Signup error:", error);
       toast.error("Something went wrong. Please try again.");
@@ -112,6 +185,8 @@ export default function SignupPage() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#f8f7f2] px-4 py-10">
       <div className="w-full max-w-md rounded-2xl border border-[#e7e5dc] bg-white p-6 shadow-sm sm:p-8">
+
+        {/* Logo */}
         <Link
           href="/"
           className="mb-6 flex items-center justify-center gap-2"
@@ -125,6 +200,7 @@ export default function SignupPage() {
           </span>
         </Link>
 
+        {/* Heading */}
         <div className="mb-5 text-center">
           <h1 className="text-2xl font-semibold text-[#1c352b]">
             Create your account
@@ -149,7 +225,10 @@ export default function SignupPage() {
                   className="h-full w-full object-cover"
                 />
               ) : (
-                <UserRound size={42} className="text-[#1c352b]/60" />
+                <UserRound
+                  size={42}
+                  className="text-[#1c352b]/60"
+                />
               )}
             </div>
 
@@ -200,6 +279,8 @@ export default function SignupPage() {
 
         {/* Sign Up Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
+
+          {/* Full Name */}
           <div>
             <label
               htmlFor="name"
@@ -219,6 +300,7 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Email */}
           <div>
             <label
               htmlFor="email"
@@ -238,6 +320,7 @@ export default function SignupPage() {
             />
           </div>
 
+          {/* Password */}
           <div>
             <label
               htmlFor="password"
@@ -264,7 +347,11 @@ export default function SignupPage() {
                 aria-label="Toggle password visibility"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#1c352b]"
               >
-                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                {showPassword ? (
+                  <EyeOff size={18} />
+                ) : (
+                  <Eye size={18} />
+                )}
               </button>
             </div>
 
@@ -273,6 +360,7 @@ export default function SignupPage() {
             </p>
           </div>
 
+          {/* Confirm Password */}
           <div>
             <label
               htmlFor="confirmPassword"
@@ -295,7 +383,9 @@ export default function SignupPage() {
 
               <button
                 type="button"
-                onClick={() => setShowConfirmPassword((prev) => !prev)}
+                onClick={() =>
+                  setShowConfirmPassword((prev) => !prev)
+                }
                 aria-label="Toggle confirm password visibility"
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-[#1c352b]"
               >
@@ -308,6 +398,7 @@ export default function SignupPage() {
             </div>
           </div>
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
@@ -317,6 +408,7 @@ export default function SignupPage() {
           </button>
         </form>
 
+        {/* Login Link */}
         <p className="mt-6 text-center text-sm text-gray-500">
           Already have an account?{" "}
           <Link
