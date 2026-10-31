@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useState, useSyncExternalStore } from "react";
+import { Suspense, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
@@ -39,6 +39,56 @@ type ProfileMenuProps = {
   onClose: () => void;
   onLogout: () => Promise<void>;
 };
+
+type NavbarLinkProps = {
+  href: string;
+  label: string;
+  activeClassName: string;
+  inactiveClassName: string;
+  onClick?: () => void;
+};
+
+function PathnameNavbarLink({
+  href,
+  label,
+  activeClassName,
+  inactiveClassName,
+  onClick,
+}: NavbarLinkProps) {
+  const pathname = usePathname();
+  const isActive =
+    href === "/"
+      ? pathname === "/"
+      : pathname === href || pathname.startsWith(`${href}/`);
+
+  return (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={isActive ? activeClassName : inactiveClassName}
+    >
+      {label}
+    </Link>
+  );
+}
+
+function NavbarLink(props: NavbarLinkProps) {
+  return (
+    <Suspense
+      fallback={
+        <Link
+          href={props.href}
+          onClick={props.onClick}
+          className={props.inactiveClassName}
+        >
+          {props.label}
+        </Link>
+      }
+    >
+      <PathnameNavbarLink {...props} />
+    </Suspense>
+  );
+}
 
 function ProfileMenu({
   userName,
@@ -130,7 +180,6 @@ export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
-  const pathname = usePathname();
   const router = useRouter();
   const isMounted = useSyncExternalStore(
     subscribeToNothing,
@@ -142,11 +191,6 @@ export default function Navbar() {
 
   const user = session?.user;
   const isAuthPending = !isMounted || isPending;
-
-  const isActive = (href: string) => {
-    if (href === "/") return pathname === "/";
-    return pathname === href || pathname.startsWith(`${href}/`);
-  };
 
   const handleLogout = async () => {
     try {
@@ -192,17 +236,13 @@ export default function Navbar() {
         {/* Desktop Navigation */}
         <div className="hidden items-center gap-7 lg:flex">
           {navLinks.map((link) => (
-            <Link
+            <NavbarLink
               key={link.href}
               href={link.href}
-              className={`text-base transition-colors hover:text-primary ${
-                isActive(link.href)
-                  ? "font-bold text-primary"
-                  : "font-medium text-foreground/75"
-              }`}
-            >
-              {link.name}
-            </Link>
+              label={link.name}
+              activeClassName="text-base font-bold text-primary transition-colors hover:text-primary"
+              inactiveClassName="text-base font-medium text-foreground/75 transition-colors hover:text-primary"
+            />
           ))}
         </div>
 
@@ -255,18 +295,14 @@ export default function Navbar() {
         <div className="border-t border-border bg-background px-5 py-5 lg:hidden">
           <div className="mx-auto flex max-w-7xl flex-col gap-1">
             {navLinks.map((link) => (
-              <Link
+              <NavbarLink
                 key={link.href}
                 href={link.href}
+                label={link.name}
                 onClick={() => setIsOpen(false)}
-                className={`rounded-lg px-4 py-3 text-sm transition ${
-                  isActive(link.href)
-                    ? "bg-primary/5 font-bold text-primary"
-                    : "font-medium text-foreground hover:bg-muted hover:text-primary"
-                }`}
-              >
-                {link.name}
-              </Link>
+                activeClassName="rounded-lg bg-primary/5 px-4 py-3 text-sm font-bold text-primary transition"
+                inactiveClassName="rounded-lg px-4 py-3 text-sm font-medium text-foreground transition hover:bg-muted hover:text-primary"
+              />
             ))}
 
             <div className="mt-3 border-t border-border pt-4">
