@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   Camera,
@@ -21,27 +22,52 @@ import { authClient } from "@/lib/auth-client";
 const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
 
+type ProfileUser = {
+  id: string;
+  name: string;
+  email: string;
+  image?: string | null;
+  createdAt: Date | string;
+};
+
+type ProfileEditorProps = {
+  user: ProfileUser;
+  refetch: () => Promise<unknown>;
+};
+
 export default function ProfilePage() {
   const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: session, isPending, refetch } =
     authClient.useSession();
-
   const user = session?.user;
 
-  const [name, setName] = useState("");
-  const [imagePreview, setImagePreview] = useState("");
+  useEffect(() => {
+    if (!isPending && !user) {
+      router.replace("/login");
+    }
+  }, [isPending, user, router]);
+
+  if (isPending || !user) {
+    return (
+      <div className="flex min-h-[70vh] items-center justify-center">
+        <Loader2 className="animate-spin" size={30} />
+      </div>
+    );
+  }
+
+  return <ProfileEditor key={user.id} user={user} refetch={refetch} />;
+}
+
+function ProfileEditor({ user, refetch }: ProfileEditorProps) {
+  const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [name, setName] = useState(user.name || "");
+  const [imagePreview, setImagePreview] = useState(user.image || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      setName(user.name || "");
-      setImagePreview(user.image || "");
-    }
-  }, [user]);
 
   useEffect(() => {
     return () => {
@@ -50,12 +76,6 @@ export default function ProfilePage() {
       }
     };
   }, [imagePreview]);
-
-  useEffect(() => {
-    if (!isPending && !user) {
-      router.replace("/login");
-    }
-  }, [isPending, user, router]);
 
   // Select profile picture
   const handleImageChange = (
@@ -134,6 +154,11 @@ export default function ProfilePage() {
 
       await refetch();
 
+      if (imagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(imagePreview);
+      }
+
+      setImagePreview(imageUrl);
       setImageFile(null);
 
       toast.success("Profile updated successfully!");
@@ -167,14 +192,6 @@ export default function ProfilePage() {
     }
   };
 
-  if (isPending || !user) {
-    return (
-      <div className="flex min-h-[70vh] items-center justify-center">
-        <Loader2 className="animate-spin" size={30} />
-      </div>
-    );
-  }
-
   return (
     <main className="min-h-screen bg-background px-4 py-10">
       <div className="mx-auto max-w-3xl">
@@ -207,7 +224,7 @@ export default function ProfilePage() {
         <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
 
           {/* Cover */}
-          <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+          <div className="h-32 bg-linear-to-r from-primary/20 via-primary/10 to-transparent" />
 
           <div className="px-6 pb-8 sm:px-8">
 
@@ -232,9 +249,12 @@ export default function ProfilePage() {
                   className="group relative h-28 w-28 overflow-hidden rounded-full border-4 border-card bg-muted shadow-md"
                 >
                   {imagePreview ? (
-                    <img
+                    <Image
                       src={imagePreview}
                       alt="Profile picture"
+                      width={112}
+                      height={112}
+                      unoptimized
                       className="h-full w-full object-cover"
                       onError={() => setImagePreview("")}
                     />
