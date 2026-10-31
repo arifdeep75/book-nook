@@ -1,15 +1,21 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookPlus, ImagePlus, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 
 const categories = ["Fiction", "Science", "History", "Kids", "Others"];
 
+const SERVER_URL =
+  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
+
 export default function AddBookPage() {
   const router = useRouter();
   const { data: session, isPending } = authClient.useSession();
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -26,6 +32,59 @@ export default function AddBookPage() {
   }
 
   const user = session.user;
+
+  async function handleAddBook(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSubmitting) return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
+    const bookData = {
+      title: String(formData.get("title") || "").trim(),
+      author: String(formData.get("author") || "").trim(),
+      category: String(formData.get("category") || ""),
+      image: String(formData.get("image") || "").trim(),
+      description: String(formData.get("description") || "").trim(),
+      contributorName: user.name || "",
+      contributorEmail: user.email || "",
+      totalCopies: Number(formData.get("totalCopies")),
+    };
+
+    try {
+      setIsSubmitting(true);
+
+      const response = await fetch(`${SERVER_URL}/books`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(bookData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Could not add the book.");
+      }
+
+      toast.success("Book added successfully!");
+      form.reset();
+
+      router.push("/books");
+    } catch (error) {
+      console.error("Add book error:", error);
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong. Please try again."
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
@@ -46,10 +105,7 @@ export default function AddBookPage() {
         </div>
 
         <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            alert("Book form is ready. Backend save integration comes next.");
-          }}
+          onSubmit={handleAddBook}
           className="space-y-6 rounded-2xl border border-border bg-card p-5 sm:p-8"
         >
           <div className="flex items-center gap-3 border-b border-border pb-5">
@@ -72,6 +128,7 @@ export default function AddBookPage() {
               <label className="text-sm font-medium text-foreground">
                 Book Title
               </label>
+
               <input
                 type="text"
                 name="title"
@@ -85,6 +142,7 @@ export default function AddBookPage() {
               <label className="text-sm font-medium text-foreground">
                 Author
               </label>
+
               <input
                 type="text"
                 name="author"
@@ -95,27 +153,46 @@ export default function AddBookPage() {
             </div>
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">
-              Category
-            </label>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Category
+              </label>
 
-            <select
-              name="category"
-              defaultValue=""
-              required
-              className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
-            >
-              <option value="" disabled>
-                Select a category
-              </option>
-
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
+              <select
+                name="category"
+                defaultValue=""
+                required
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary"
+              >
+                <option value="" disabled>
+                  Select a category
                 </option>
-              ))}
-            </select>
+
+                {categories.map((category) => (
+                  <option key={category} value={category}>
+                    {category}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-foreground">
+                Total Copies
+              </label>
+
+              <input
+                type="number"
+                name="totalCopies"
+                min="1"
+                step="1"
+                required
+                defaultValue={1}
+                placeholder="Enter total copies"
+                className="h-11 w-full rounded-lg border border-border bg-background px-3 text-sm outline-none focus:border-primary"
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -197,9 +274,17 @@ export default function AddBookPage() {
 
           <button
             type="submit"
-            className="h-11 w-full rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+            disabled={isSubmitting}
+            className="flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Add Book
+            {isSubmitting ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                Adding Book...
+              </>
+            ) : (
+              "Add Book"
+            )}
           </button>
         </form>
       </div>
