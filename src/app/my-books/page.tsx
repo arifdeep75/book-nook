@@ -47,6 +47,7 @@ export default function MyBooksPage() {
 
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedForEmail, setLoadedForEmail] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
@@ -63,48 +64,59 @@ export default function MyBooksPage() {
   }, []);
 
   const fetchMyBooks = useCallback(async () => {
-    if (!userEmail) return;
-
-    try {
-      setLoading(true);
-      setError("");
-
-      // The public books endpoint returns the collection. The UI filters
-      // it for the signed-in contributor; update/delete ownership is enforced
-      // separately by the authenticated backend routes.
-      const response = await fetch(`${SERVER_URL}/books`, {
-        method: "GET",
-        cache: "no-store",
-      });
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to load books.");
-      }
-
-      const myBooks = (Array.isArray(result.books) ? result.books : []).filter(
-        (book: Book) =>
-          book.contributorEmail?.toLowerCase() === userEmail.toLowerCase()
-      );
-
-      setBooks(myBooks);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
+    if (!userEmail) {
+      throw new Error("Unable to identify your account email.");
     }
+
+    // The public books endpoint returns the collection. The UI filters
+    // it for the signed-in contributor; update/delete ownership is enforced
+    // separately by the authenticated backend routes.
+    const response = await fetch(`${SERVER_URL}/books`, {
+      method: "GET",
+      cache: "no-store",
+    });
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Failed to load books.");
+    }
+
+    return (Array.isArray(result.books) ? result.books : []).filter(
+      (book: Book) =>
+        book.contributorEmail?.toLowerCase() === userEmail.toLowerCase()
+    );
   }, [userEmail]);
 
   useEffect(() => {
-    if (isPending) return;
+    if (isPending || !userEmail) return;
 
-    if (!userEmail) {
-      setBooks([]);
-      setLoading(false);
-      return;
-    }
+    let active = true;
 
-    void fetchMyBooks();
+    fetchMyBooks()
+      .then((myBooks) => {
+        if (active) {
+          setBooks(myBooks);
+          setError("");
+          setLoadedForEmail(userEmail);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : "Something went wrong."
+          );
+          setLoadedForEmail(userEmail);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
   }, [isPending, userEmail, reloadKey, fetchMyBooks]);
 
   const handleEdit = (book: Book) => {
@@ -245,7 +257,20 @@ export default function MyBooksPage() {
     );
   }
 
-  if (loading) {
+  if (!userEmail) {
+    return (
+      <main className="flex min-h-[70vh] items-center justify-center bg-[#f8f7f2] px-5">
+        <div
+          role="alert"
+          className="max-w-md rounded-2xl bg-white p-8 text-center text-sm text-red-700 shadow-sm"
+        >
+          Unable to identify your account email. Please sign in again.
+        </div>
+      </main>
+    );
+  }
+
+  if (loading || loadedForEmail !== userEmail) {
     return (
       <main className="flex min-h-[70vh] items-center justify-center bg-[#f8f7f2]">
         <div className="text-center">
@@ -299,7 +324,11 @@ export default function MyBooksPage() {
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
             <button
-              onClick={() => setReloadKey((key) => key + 1)}
+              onClick={() => {
+                setLoading(true);
+                setError("");
+                setReloadKey((key) => key + 1);
+              }}
               className="ml-3 font-bold underline"
             >
               Try again

@@ -1,7 +1,13 @@
 
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+} from "react";
+import Image from "next/image";
 import {
   Star,
   Loader2,
@@ -55,67 +61,85 @@ export default function Reviews() {
 
   const isLoggedIn = Boolean(session?.user);
 
-  // Fetch all reviews
-  const fetchReviews = useCallback(async () => {
-    try {
-      setLoading(true);
+  const loadReviews = useCallback(async () => {
+    const response = await fetch(`${API_URL}/reviews`, {
+      method: "GET",
+      cache: "no-store",
+    });
 
-      const response = await fetch(`${API_URL}/reviews`, {
-        method: "GET",
-        cache: "no-store",
-      });
+    const data: ReviewsResponse = await response.json();
 
-      const data: ReviewsResponse = await response.json();
-
-      if (!response.ok || !data.success) {
-        throw new Error(data.message || "Failed to load reviews.");
-      }
-
-      setReviews(Array.isArray(data.reviews) ? data.reviews : []);
-      setCurrentIndex(0);
-      setError("");
-    } catch (err) {
-      console.error("Reviews fetch error:", err);
-      setError("Unable to load reviews. Please try again later.");
-    } finally {
-      setLoading(false);
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || "Failed to load reviews.");
     }
+
+    return Array.isArray(data.reviews) ? data.reviews : [];
   }, []);
 
-  // Check current user's review status
-  const checkMyReview = useCallback(async () => {
-    if (!isLoggedIn) {
-      setHasReviewed(false);
-      return;
+  const loadMyReviewStatus = useCallback(async () => {
+    const response = await authenticatedFetch(`${API_URL}/reviews/me`, {
+      method: "GET",
+      cache: "no-store",
+    });
+
+    const data: MyReviewResponse = await response.json();
+
+    if (!response.ok) {
+      throw new Error("Failed to check review status.");
     }
 
-    try {
-      const response = await authenticatedFetch(`${API_URL}/reviews/me`, {
-        method: "GET",
-        cache: "no-store",
+    return data.hasReviewed;
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    loadReviews()
+      .then((loadedReviews) => {
+        if (active) {
+          setReviews(loadedReviews);
+          setCurrentIndex(0);
+          setError("");
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          console.error("Reviews fetch error:", err);
+          setError("Unable to load reviews. Please try again later.");
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
       });
 
-      const data: MyReviewResponse = await response.json();
-
-      if (!response.ok) {
-        throw new Error("Failed to check review status.");
-      }
-
-      setHasReviewed(data.hasReviewed);
-    } catch (err) {
-      console.error("Review status error:", err);
-    }
-  }, [isLoggedIn]);
+    return () => {
+      active = false;
+    };
+  }, [loadReviews]);
 
   useEffect(() => {
-    void fetchReviews();
-  }, [fetchReviews]);
+    if (sessionLoading || !isLoggedIn) return;
 
-  useEffect(() => {
-    if (!sessionLoading) {
-      void checkMyReview();
-    }
-  }, [sessionLoading, checkMyReview]);
+    let active = true;
+
+    loadMyReviewStatus()
+      .then((reviewStatus) => {
+        if (active) {
+          setHasReviewed(reviewStatus);
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          console.error("Review status error:", err);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [sessionLoading, isLoggedIn, loadMyReviewStatus]);
 
   // Calculate average rating
   const averageRating =
@@ -202,8 +226,12 @@ export default function Reviews() {
       setHoverRating(0);
       setHasReviewed(true);
 
-      await fetchReviews();
-      await checkMyReview();
+      const loadedReviews = await loadReviews();
+      setReviews(loadedReviews);
+      setCurrentIndex(0);
+
+      const reviewStatus = await loadMyReviewStatus();
+      setHasReviewed(reviewStatus);
     } catch (err) {
       setError(
         err instanceof Error
@@ -445,9 +473,12 @@ export default function Reviews() {
                     <div className="mb-5 flex items-start justify-between gap-3">
                       <div className="flex min-w-0 items-center gap-3">
                         {currentReview.userImage ? (
-                          <img
+                          <Image
                             src={currentReview.userImage}
                             alt={`${currentReview.userName}'s profile`}
+                            width={48}
+                            height={48}
+                            unoptimized
                             className="h-12 w-12 shrink-0 rounded-full border border-gray-200 object-cover"
                             onError={(event) => {
                               event.currentTarget.style.display = "none";

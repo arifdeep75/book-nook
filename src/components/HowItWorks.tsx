@@ -69,7 +69,7 @@ export default function HowItWorks() {
 
         {/* Step Cards */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {steps.map((step, index) => {
+          {steps.map((step) => {
             const Icon = step.icon;
 
             return (
@@ -78,7 +78,7 @@ export default function HowItWorks() {
                 className="group relative overflow-hidden rounded-2xl border border-[#e5e6dc] bg-white p-5 transition duration-300 hover:-translate-y-1 hover:border-[#d8c58f] hover:shadow-lg hover:shadow-[#1c352b]/5 sm:p-6"
               >
                 {/* Step Number */}
-                <span className="absolute right-4 top-3 font-serif text-5xl font-bold text-[#1c352b]/[0.04] transition group-hover:text-[#b99b5d]/15">
+                <span className="absolute right-4 top-3 font-serif text-5xl font-bold text-[#1c352b]/4 transition group-hover:text-[#b99b5d]/15">
                   {step.number}
                 </span>
 

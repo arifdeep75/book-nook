@@ -174,7 +174,7 @@ export default function NewArrivals() {
         <div className="mt-8 text-center">
           <Link
             href="/books"
-            className="inline-flex items-center gap-2 rounded-lg border border-2 border-[#245c45] px-6 py-2.5 text-sm font-semibold text-[#245c45] transition hover:bg-[#245c45] hover:text-white"
+            className="inline-flex items-center gap-2 rounded-lg border-2 border-[#245c45] px-6 py-2.5 text-sm font-semibold text-[#245c45] transition hover:bg-[#245c45] hover:text-white"
           >
             See All Books
             <span>→</span>
