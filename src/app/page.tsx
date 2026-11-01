@@ -1,10 +1,16 @@
 
+import type { Metadata } from "next";
 import { Suspense } from "react";
 import HeroSlider from "../components/HeroSlider";
 import HowItWorks from "@/components/HowItWorks";
 import Categories from "@/components/Categories";
 import Reviews from "@/components/Reviews";
 import NewArrivals from "@/components/NewArrivals";
+
+export const metadata: Metadata = {
+  title: "Home",
+  description: "Discover, borrow, and explore books with BookNook.",
+};
 
 export default function Home() {
   return (
@@ -36,7 +42,7 @@ export default function Home() {
         <HeroSlider />
       </Suspense>
 
-      <NewArrivals></NewArrivals>
+      <NewArrivals />
 
       <HowItWorks />
 

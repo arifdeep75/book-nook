@@ -59,6 +59,11 @@ export default function MyBooksPage() {
 
   const userEmail = session?.user?.email;
 
+  // Page Title
+  useEffect(() => {
+    document.title = "BookNook | My Books";
+  }, []);
+
   useEffect(() => {
     if (isPending || !userEmail) return;
     const email = userEmail;
@@ -119,7 +124,9 @@ export default function MyBooksPage() {
 
   // Update form fields
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
   ) => {
     const { name, value } = e.target;
 
@@ -328,9 +335,7 @@ export default function MyBooksPage() {
 
         {/* Book count */}
         <div className="mb-6 flex items-center justify-between">
-          <p className="text-sm text-gray-500">
-            Your contributed books
-          </p>
+          <p className="text-sm text-gray-500">Your contributed books</p>
           <span className="rounded-full bg-[#e5ede5] px-4 py-1.5 text-sm font-bold text-[#245c45]">
             {books.length} {books.length === 1 ? "Book" : "Books"}
           </span>

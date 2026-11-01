@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -32,6 +33,12 @@ export default function BooksPage() {
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("All");
 
+  // Page Title
+  useEffect(() => {
+    document.title = "BookNook | All Books";
+  }, []);
+
+  // Fetch Books
   useEffect(() => {
     const fetchBooks = async () => {
       try {

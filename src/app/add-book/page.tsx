@@ -1,6 +1,7 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { BookPlus, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +17,11 @@ export default function AddBookPage() {
   const { data: session, isPending } = authClient.useSession();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Page Title
+  useEffect(() => {
+    document.title = "BookNook | Add Book";
+  }, []);
 
   useEffect(() => {
     if (!isPending && !session) {
@@ -33,7 +39,7 @@ export default function AddBookPage() {
 
   const user = session.user;
 
-  async function handleAddBook(event: React.FormEvent<HTMLFormElement>) {
+  async function handleAddBook(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (isSubmitting) return;

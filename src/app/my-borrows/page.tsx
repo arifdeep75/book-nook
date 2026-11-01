@@ -33,6 +33,11 @@ export default function MyBorrowsPage() {
 
   const userEmail = session?.user?.email;
 
+  // Page Title
+  useEffect(() => {
+    document.title = "BookNook | My Borrows";
+  }, []);
+
   // Fetch user's borrowed books
   useEffect(() => {
     if (isPending || !userEmail) return;
@@ -169,7 +174,6 @@ export default function MyBorrowsPage() {
   return (
     <main className="min-h-screen bg-[#f8f7f2] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-
         {/* Header */}
         <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>

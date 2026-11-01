@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
@@ -97,6 +98,13 @@ function BookDetailsContent() {
 
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Dynamic Page Title
+  useEffect(() => {
+    document.title = book
+      ? `BookNook | ${book.title}`
+      : "BookNook | Book Details";
+  }, [book]);
 
   // Fetch book and user's active borrow record
   useEffect(() => {
