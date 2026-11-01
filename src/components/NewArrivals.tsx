@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -57,13 +56,12 @@ export default function NewArrivals() {
   }, []);
 
   return (
-    <section className="bg-[#f8f7f2] px-4 py-16 sm:px-6 lg:px-8">
+    <section className="bg-[#f8f7f2] px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
       <div className="mx-auto max-w-7xl">
-
         {/* Section Heading */}
-        <div className="mb-9 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div className="mb-7 flex flex-col justify-between gap-3 sm:flex-row sm:items-end">
           <div>
-            <p className="mb-2 text-sm font-bold uppercase tracking-[0.2em] text-[#64836e]">
+            <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[#64836e]">
               Fresh From Our Library
             </p>
 
@@ -71,23 +69,24 @@ export default function NewArrivals() {
               New Arrivals
             </h2>
 
-            <p className="mt-3 max-w-xl text-sm leading-6 text-gray-500 sm:text-base">
+            <p className="mt-2 max-w-xl text-sm leading-6 text-gray-500">
               Discover the latest additions to our collection and find your
               next favorite read.
             </p>
           </div>
 
-          <span className="w-fit rounded-full bg-[#e5ede5] px-4 py-2 text-sm font-semibold text-[#245c45]">
+          <span className="w-fit rounded-full bg-[#e5ede5] px-3 py-1.5 text-xs font-semibold text-[#245c45]">
             Latest 6 Books
           </span>
         </div>
 
         {/* Loading */}
         {loading && (
-          <div className="flex min-h-64 items-center justify-center">
+          <div className="flex min-h-56 items-center justify-center">
             <div className="text-center">
-              <div className="mx-auto h-11 w-11 animate-spin rounded-full border-4 border-[#dce5dc] border-t-[#245c45]" />
-              <p className="mt-4 text-sm font-medium text-[#52665a]">
+              <div className="mx-auto h-9 w-9 animate-spin rounded-full border-4 border-[#dce5dc] border-t-[#245c45]" />
+
+              <p className="mt-3 text-sm font-medium text-[#52665a]">
                 Discovering new books...
               </p>
             </div>
@@ -103,27 +102,29 @@ export default function NewArrivals() {
 
         {/* Empty State */}
         {!loading && !error && books.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-[#cbd8cb] bg-white px-6 py-14 text-center">
-            <div className="text-5xl">📚</div>
-            <h3 className="mt-4 text-xl font-bold text-[#173c2d]">
+          <div className="rounded-2xl border border-dashed border-[#cbd8cb] bg-white px-6 py-12 text-center">
+            <div className="text-4xl">📚</div>
+
+            <h3 className="mt-3 text-lg font-bold text-[#173c2d]">
               No Books Available Yet
             </h3>
+
             <p className="mt-2 text-sm text-gray-500">
               New books will appear here when they are added to our library.
             </p>
           </div>
         )}
 
-        {/* Books Grid */}
+        {/* Compact Books Grid */}
         {!loading && !error && books.length > 0 && (
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {books.map((book) => (
               <article
                 key={book._id}
-                className="group overflow-hidden rounded-2xl border border-[#e8e8df] bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-lg"
+                className="group overflow-hidden rounded-xl border border-[#e8e8df] bg-white shadow-sm transition duration-300 hover:-translate-y-1 hover:border-[#d8bd7a] hover:shadow-lg"
               >
                 {/* Image */}
-                <div className="relative h-64 overflow-hidden bg-[#eef1e9]">
+                <div className="relative h-44 overflow-hidden bg-[#eef1e9]">
                   {book.image ? (
                     <Image
                       src={book.image}
@@ -131,32 +132,32 @@ export default function NewArrivals() {
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       unoptimized
-                      className="object-cover transition duration-500 group-hover:scale-105"
+                      className="object-contain transition duration-500 group-hover:scale-105"
                     />
                   ) : (
-                    <div className="flex h-full items-center justify-center text-6xl">
+                    <div className="flex h-full items-center justify-center text-5xl">
                       📖
                     </div>
                   )}
 
-                  <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-[#245c45] shadow-sm">
+                  <span className="absolute right-2.5 top-2.5 max-w-[70%] truncate rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-[#245c45] shadow-sm">
                     {book.category}
                   </span>
                 </div>
 
                 {/* Details */}
-                <div className="p-5">
-                  <h3 className="line-clamp-1 text-xl font-bold text-[#173c2d] transition group-hover:text-[#245c45]">
+                <div className="p-3.5">
+                  <h3 className="line-clamp-1 text-base font-bold text-[#173c2d] transition group-hover:text-[#245c45]">
                     {book.title}
                   </h3>
 
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-1.5 truncate text-xs text-gray-500">
                     by {book.author}
                   </p>
 
                   <Link
                     href={`/books/${book._id}`}
-                    className="mt-5 inline-flex w-full items-center justify-center rounded-lg bg-[#245c45] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#194632]"
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-[#245c45] px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-[#194632]"
                   >
                     View Details
                     <span className="ml-2 transition group-hover:translate-x-1">
@@ -170,10 +171,10 @@ export default function NewArrivals() {
         )}
 
         {/* See All Books */}
-        <div className="mt-10 text-center">
+        <div className="mt-8 text-center">
           <Link
             href="/books"
-            className="inline-flex items-center gap-2 rounded-lg border-2 border-[#245c45] px-7 py-3 font-semibold text-[#245c45] transition hover:bg-[#245c45] hover:text-white"
+            className="inline-flex items-center gap-2 rounded-lg border border-2 border-[#245c45] px-6 py-2.5 text-sm font-semibold text-[#245c45] transition hover:bg-[#245c45] hover:text-white"
           >
             See All Books
             <span>→</span>

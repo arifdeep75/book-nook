@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -75,12 +74,12 @@ export default function BooksPage() {
   return (
     <main className="min-h-screen bg-[#F2F1E9] text-[#24352D]">
       {/* Hero Section */}
-      <section className="px-4 pb-7 pt-7 sm:px-8 lg:pb-9 lg:pt-9">
+      <section className="px-4 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-8">
         <div className="mx-auto max-w-7xl">
           <div className="relative overflow-hidden rounded-3xl bg-[#173F32] px-6 py-7 shadow-lg sm:px-9 sm:py-9 lg:px-12">
             {/* Decorative Circles */}
-            <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full border-35px border-white/5" />
-            <div className="absolute -bottom-36 right-36 h-72 w-72 rounded-full border-35px border-[#D8BD7A]/10" />
+            <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full border-[35px] border-white/5" />
+            <div className="absolute -bottom-36 right-36 h-72 w-72 rounded-full border-[35px] border-[#D8BD7A]/10" />
 
             {/* Hero Content */}
             <div className="relative z-10 max-w-2xl">
@@ -147,9 +146,9 @@ export default function BooksPage() {
       </section>
 
       {/* Books Collection */}
-      <section className="mx-auto max-w-7xl px-4 pb-20 sm:px-8">
+      <section className="mx-auto max-w-7xl px-4 pb-16 sm:px-8">
         {/* Section Header */}
-        <div className="mb-8 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <div className="mb-7 flex flex-col justify-between gap-5 md:flex-row md:items-end">
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#A18443]">
               EXPLORE THE LIBRARY
@@ -173,18 +172,18 @@ export default function BooksPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search title or author..."
-              className="w-full rounded-xl border border-[#DCE0D5] bg-white px-12 py-3.5 text-sm text-[#24352D] outline-none transition placeholder:text-[#A0AAA1] focus:border-[#244B3C] focus:ring-2 focus:ring-[#244B3C]/10"
+              className="w-full rounded-xl border border-[#DCE0D5] bg-white px-12 py-3 text-sm text-[#24352D] outline-none transition placeholder:text-[#A0AAA1] focus:border-[#244B3C] focus:ring-2 focus:ring-[#244B3C]/10"
             />
           </div>
         </div>
 
         {/* Category Filter */}
-        <div className="mb-8 flex flex-wrap gap-2">
+        <div className="mb-7 flex flex-wrap gap-2">
           {categories.map((item) => (
             <button
               key={item}
               onClick={() => setCategory(item)}
-              className={`rounded-full px-5 py-2.5 text-sm font-medium transition-all ${
+              className={`rounded-full px-4 py-2 text-xs font-medium transition-all sm:text-sm ${
                 category === item
                   ? "bg-[#244B3C] text-white shadow-md shadow-[#244B3C]/15"
                   : "border border-[#D9DED5] bg-white text-[#66756A] hover:border-[#244B3C] hover:text-[#244B3C]"
@@ -219,7 +218,7 @@ export default function BooksPage() {
         ) : (
           <>
             {/* Result Count */}
-            <div className="mb-5 flex items-center justify-between">
+            <div className="mb-4 flex items-center justify-between">
               <p className="text-sm text-[#78847A]">
                 Showing{" "}
                 <span className="font-semibold text-[#244B3C]">
@@ -233,15 +232,15 @@ export default function BooksPage() {
               </p>
             </div>
 
-            {/* Responsive Book Grid: 1 / 2 / 3 Columns */}
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {/* Compact Book Grid */}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filteredBooks.map((book) => (
                 <article
                   key={book._id}
-                  className="group flex min-w-0 flex-col rounded-2xl border border-[#E6E5DA] bg-white p-4 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-[#D8BD7A] hover:shadow-xl hover:shadow-[#244B3C]/5"
+                  className="group flex min-w-0 flex-col rounded-xl border border-[#E6E5DA] bg-white p-3 shadow-sm transition duration-300 hover:-translate-y-1 hover:border-[#D8BD7A] hover:shadow-lg hover:shadow-[#244B3C]/5"
                 >
                   {/* Book Cover */}
-                  <div className="relative h-56 w-full overflow-hidden rounded-xl bg-[#E9E7DB] shadow-md">
+                  <div className="relative h-44 w-full overflow-hidden rounded-lg bg-[#E9E7DB]">
                     {book.image ? (
                       <Image
                         src={book.image}
@@ -259,10 +258,10 @@ export default function BooksPage() {
                   </div>
 
                   {/* Book Details */}
-                  <div className="flex min-w-0 flex-1 flex-col py-3">
+                  <div className="flex min-w-0 flex-1 flex-col py-2">
                     {/* Category & Availability */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="max-w-[55%] truncate rounded-full bg-[#F4F0E3] px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-[#96763A]">
+                      <span className="max-w-[55%] truncate rounded-full bg-[#F4F0E3] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#96763A]">
                         {book.category}
                       </span>
 
@@ -280,25 +279,25 @@ export default function BooksPage() {
                     </div>
 
                     {/* Title & Author */}
-                    <div className="mt-3">
-                      <h3 className="line-clamp-2 min-h-18 font-serif text-lg font-semibold leading-snug text-[#173F32] transition group-hover:text-[#A18443]">
+                    <div className="mt-2">
+                      <h3 className="line-clamp-2 min-h-12 font-serif text-base font-semibold leading-snug text-[#173F32] transition group-hover:text-[#A18443]">
                         {book.title}
                       </h3>
 
-                      <p className="mt-1 truncate text-xs font-medium text-[#879187] sm:text-sm">
+                      <p className="mt-1 truncate text-xs font-medium text-[#879187]">
                         by {book.author}
                       </p>
                     </div>
 
                     {/* Description */}
-                    <p className="mt-3 line-clamp-3 min-h-18 text-xs leading-5 text-[#7A857C] sm:text-sm sm:leading-6">
+                    <p className="mt-2 line-clamp-2 min-h-10 text-xs leading-5 text-[#7A857C]">
                       {book.description}
                     </p>
 
                     {/* Copies & Details Button */}
                     <div className="mt-auto flex items-center justify-between gap-2 border-t border-[#EEF0E8] pt-3">
                       <div>
-                        <p className="text-[10px] text-[#9AA49A]">
+                        <p className="text-[9px] text-[#9AA49A]">
                           AVAILABLE COPIES
                         </p>
 
@@ -312,10 +311,10 @@ export default function BooksPage() {
 
                       <Link
                         href={`/books/${book._id}`}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-[#244B3C] px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-[#173F32] sm:px-4 sm:text-sm"
+                        className="inline-flex items-center gap-1 rounded-lg bg-[#244B3C] px-3 py-2 text-xs font-semibold text-white transition hover:bg-[#173F32]"
                       >
                         Details
-                        <ArrowUpRight className="h-4 w-4" />
+                        <ArrowUpRight className="h-3.5 w-3.5" />
                       </Link>
                     </div>
                   </div>

@@ -10,6 +10,7 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-sans);
+
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -18,11 +19,13 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -39,6 +42,7 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -47,7 +51,11 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 }
+
 :root {
+  color-scheme: light;
+  --book-gold-foreground: #96763a;
+
   --background: oklch(0.978 0.008 90);
   --foreground: oklch(0.24 0.025 145);
 
@@ -94,47 +102,157 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  color-scheme: dark;
+  --book-gold-foreground: #dfc58d;
+
+  --background: oklch(0.17 0.025 150);
+  --foreground: oklch(0.94 0.012 90);
+
+  --card: oklch(0.21 0.025 150);
+  --card-foreground: oklch(0.94 0.012 90);
+
+  --popover: oklch(0.21 0.025 150);
+  --popover-foreground: oklch(0.94 0.012 90);
+
+  --primary: oklch(0.72 0.09 155);
+  --primary-foreground: oklch(0.18 0.025 150);
+
+  --secondary: oklch(0.31 0.035 150);
+  --secondary-foreground: oklch(0.94 0.012 90);
+
+  --muted: oklch(0.27 0.025 150);
+  --muted-foreground: oklch(0.72 0.02 145);
+
+  --accent: oklch(0.32 0.04 150);
+  --accent-foreground: oklch(0.94 0.012 90);
+
+  --destructive: oklch(0.65 0.19 25);
+
+  --border: oklch(0.34 0.025 150);
+  --input: oklch(0.34 0.025 150);
+  --ring: oklch(0.72 0.09 155);
+
+  --chart-1: oklch(0.72 0.09 155);
+  --chart-2: oklch(0.82 0.08 82);
+  --chart-3: oklch(0.65 0.07 45);
+  --chart-4: oklch(0.65 0.05 145);
+  --chart-5: oklch(0.62 0.04 220);
+
+  --sidebar: oklch(0.21 0.025 150);
+  --sidebar-foreground: oklch(0.94 0.012 90);
+  --sidebar-primary: oklch(0.72 0.09 155);
+  --sidebar-primary-foreground: oklch(0.18 0.025 150);
+  --sidebar-accent: oklch(0.32 0.04 150);
+  --sidebar-accent-foreground: oklch(0.94 0.012 90);
+  --sidebar-border: oklch(0.34 0.025 150);
+  --sidebar-ring: oklch(0.72 0.09 155);
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
+}
+
+/* Keep the existing fixed brand palette readable when dark mode is active. */
+.dark [class~="bg-white"],
+.dark [class~="bg-white/95"],
+.dark [class~="bg-[#fffdf8]"] {
+  background-color: var(--card);
+}
+
+.dark [class~="bg-[#f7f5ef]"],
+.dark [class~="bg-[#f8f7f2]"] {
+  background-color: var(--background);
+}
+
+.dark [class~="bg-[#e5ede5]"],
+.dark [class~="bg-[#E9E7DB]"],
+.dark [class~="bg-[#e8efe9]"],
+.dark [class~="bg-[#edf1ed]"],
+.dark [class~="bg-[#edf5ed]"],
+.dark [class~="bg-[#eeeade]"],
+.dark [class~="bg-[#eef1e9]"],
+.dark [class~="bg-[#f0eee7]"],
+.dark [class~="bg-[#F2F1E9]"],
+.dark [class~="bg-[#F4F0E3]"],
+.dark [class~="bg-[#f5f7f2]"],
+.dark [class~="bg-gray-50"],
+.dark [class~="bg-gray-200"] {
+  background-color: var(--muted);
+}
+
+.dark [class~="bg-red-50"] {
+  background-color: color-mix(in oklch, var(--destructive) 10%, transparent);
+}
+
+.dark [class~="text-[#102F38]"],
+.dark [class~="text-[#173c2d]"],
+.dark [class~="text-[#173F32]"],
+.dark [class~="text-[#1c352b]"],
+.dark [class~="text-[#24352D]"] {
+  color: var(--foreground);
+}
+
+.dark [class~="text-[#244B3C]"],
+.dark [class~="text-[#1d4735]"],
+.dark [class~="text-[#245c45]"],
+.dark [class~="text-[#397456]"] {
+  color: var(--primary);
+}
+
+.dark [class~="text-[#96763A]"],
+.dark [class~="text-[#A18443]"],
+.dark [class~="text-[#b58b35]"],
+.dark [class~="text-[#B9A16A]"],
+.dark [class~="text-[#c9a65b]"],
+.dark [class~="text-[#D6B878]"],
+.dark [class~="text-[#D8BD7A]"],
+.dark [class~="text-[#dfc58d]"],
+.dark [class~="text-[#e4c987]"],
+.dark [class~="text-[#E6D5A8]"] {
+  color: var(--book-gold-foreground);
+}
+
+.dark [class~="text-[#1c352b]/60"],
+.dark [class~="text-[#52665a]"],
+.dark [class~="text-[#64836e]"],
+.dark [class~="text-[#66756A]"],
+.dark [class~="text-[#77766d]"],
+.dark [class~="text-[#78847A]"],
+.dark [class~="text-[#7A857C]"],
+.dark [class~="text-[#829087]"],
+.dark [class~="text-[#879187]"],
+.dark [class~="text-[#9AA49A]"],
+.dark [class~="text-[#A0AAA1]"] {
+  color: var(--muted-foreground);
+}
+
+.dark [class~="border-[#cbd8cb]"],
+.dark [class~="border-[#d5e5d8]"],
+.dark [class~="border-[#D9DED5]"],
+.dark [class~="border-[#DCE0D5]"],
+.dark [class~="border-[#dce5dc]"],
+.dark [class~="border-[#e8efe9]"],
+.dark [class~="border-[#dfd8c8]"],
+.dark [class~="border-[#e7e1d5]"],
+.dark [class~="border-[#e7e5dc]"],
+.dark [class~="border-[#e8e8df]"],
+.dark [class~="border-[#e9eee9]"],
+.dark [class~="border-[#E0E3D9]"],
+.dark [class~="border-[#E6E5DA]"],
+.dark [class~="border-[#EEF0E8]"] {
+  border-color: var(--border);
+}
+
+.dark [class~="placeholder:text-[#A0AAA1]"]::placeholder {
+  color: var(--muted-foreground);
 }

@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const navLinks = [
   { name: "Home", href: "/" },
@@ -56,6 +56,7 @@ function PathnameNavbarLink({
   onClick,
 }: NavbarLinkProps) {
   const pathname = usePathname();
+
   const isActive =
     href === "/"
       ? pathname === "/"
@@ -137,6 +138,7 @@ function ProfileMenu({
             <p className="truncate text-sm font-semibold text-foreground">
               {userName || "BookNook User"}
             </p>
+
             <p className="mt-1 truncate text-xs text-muted-foreground">
               {userEmail}
             </p>
@@ -164,7 +166,7 @@ function ProfileMenu({
             <button
               type="button"
               onClick={onLogout}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-red-600 transition hover:bg-red-50 dark:hover:bg-red-950/30"
             >
               <LogOut size={18} />
               Logout
@@ -181,6 +183,7 @@ export default function Navbar() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const router = useRouter();
+
   const isMounted = useSyncExternalStore(
     subscribeToNothing,
     getClientSnapshot,
@@ -227,6 +230,7 @@ export default function Navbar() {
             <h1 className="text-xl font-bold tracking-tight text-primary">
               BookNook
             </h1>
+
             <p className="text-[9px] tracking-[1.5px] text-muted-foreground">
               YOUR LITTLE CORNER OF BOOKS
             </p>
@@ -246,8 +250,10 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* Desktop Authentication */}
+        {/* Desktop Authentication and Theme */}
         <div className="hidden items-center gap-3 lg:flex">
+          <ThemeToggle />
+
           {isAuthPending ? (
             <div className="h-10 w-10 animate-pulse rounded-full bg-muted" />
           ) : user ? (
@@ -281,7 +287,8 @@ export default function Navbar() {
 
         {/* Mobile Menu Button */}
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
           className="rounded-lg p-2 text-primary hover:bg-muted lg:hidden"
           aria-label="Toggle navigation menu"
           aria-expanded={isOpen}
@@ -305,6 +312,16 @@ export default function Navbar() {
               />
             ))}
 
+            {/* Mobile Theme Toggle */}
+            <div className="mt-3 flex items-center justify-between border-t border-border py-3">
+              <span className="text-sm font-medium text-foreground">
+                Appearance
+              </span>
+
+              <ThemeToggle />
+            </div>
+
+            {/* Mobile Authentication */}
             <div className="mt-3 border-t border-border pt-4">
               {isAuthPending ? (
                 <div className="h-10 animate-pulse rounded-lg bg-muted" />
@@ -327,9 +344,10 @@ export default function Navbar() {
                     )}
 
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
+                      <p className="truncate text-sm font-semibold text-foreground">
                         {user.name}
                       </p>
+
                       <p className="truncate text-xs text-muted-foreground">
                         {user.email}
                       </p>
@@ -339,7 +357,7 @@ export default function Navbar() {
                   <Link
                     href="/profile"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm hover:bg-muted"
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground hover:bg-muted"
                   >
                     <UserCircle size={18} />
                     My Profile
@@ -348,7 +366,7 @@ export default function Navbar() {
                   <Link
                     href="/my-books"
                     onClick={() => setIsOpen(false)}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm hover:bg-muted"
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-sm text-foreground hover:bg-muted"
                   >
                     <BookMarked size={18} />
                     My Books
@@ -357,7 +375,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={handleLogout}
-                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50"
+                    className="flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
                   >
                     <LogOut size={18} />
                     Logout
