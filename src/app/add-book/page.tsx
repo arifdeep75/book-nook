@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { BookPlus, ImagePlus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 const categories = ["Fiction", "Science", "History", "Kids", "Others"];
 
@@ -48,26 +49,28 @@ async function handleAddBook(event: FormEvent<HTMLFormElement>) {
   const form = event.currentTarget;
   const formData = new FormData(form);
 
-  const bookData = {
-    title: String(formData.get("title") || "").trim(),
-    author: String(formData.get("author") || "").trim(),
-    category: String(formData.get("category") || ""),
-    image: String(formData.get("image") || "").trim(),
-    description: String(formData.get("description") || "").trim(),
-    totalCopies: Number(formData.get("totalCopies")),
-  };
+const bookData = {
+  title: String(formData.get("title") || "").trim(),
+  author: String(formData.get("author") || "").trim(),
+  category: String(formData.get("category") || ""),
+  image: String(formData.get("image") || "").trim(),
+  description: String(formData.get("description") || "").trim(),
+  totalCopies: Number(formData.get("totalCopies")),
+
+  contributorName: user?.name || "",
+  contributorEmail: user?.email || "",
+};
 
   try {
     setIsSubmitting(true);
 
-    const response = await fetch(`${SERVER_URL}/books`, {
-      method: "POST",
-      credentials: "include",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(bookData),
-    });
+const response = await authenticatedFetch(`${SERVER_URL}/books`, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(bookData),
+});
 
     const result = await response.json();
 

@@ -85,8 +85,8 @@ export default function BooksPage() {
         <div className="mx-auto max-w-7xl">
           <div className="relative overflow-hidden rounded-3xl bg-[#173F32] px-6 py-7 shadow-lg sm:px-9 sm:py-9 lg:px-12">
             {/* Decorative Circles */}
-            <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full border-[35px] border-white/5" />
-            <div className="absolute -bottom-36 right-36 h-72 w-72 rounded-full border-[35px] border-[#D8BD7A]/10" />
+            <div className="absolute -right-16 -top-24 h-72 w-72 rounded-full border-35px border-white/5" />
+            <div className="absolute -bottom-36 right-36 h-72 w-72 rounded-full border-35px border-[#D8BD7A]/10" />
 
             {/* Hero Content */}
             <div className="relative z-10 max-w-2xl">

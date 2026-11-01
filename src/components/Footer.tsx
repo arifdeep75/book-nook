@@ -2,6 +2,7 @@
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import TestJWTButton from "@/components/shared/TestJWTButton";
 import {
   FaFacebookF,
   FaInstagram,
@@ -176,6 +177,7 @@ export default function Footer() {
           </div>
         </div>
       </div>
+      <TestJWTButton />
     </footer>
   );
 }

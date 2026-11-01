@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useSession } from "@/lib/auth-client";
+import { authenticatedFetch } from "../lib/authenticated-fetch";
 
 interface Review {
   _id: string;
@@ -57,22 +58,22 @@ export default function Reviews() {
   // Fetch all reviews
   const fetchReviews = useCallback(async () => {
     try {
+      setLoading(true);
+
       const response = await fetch(`${API_URL}/reviews`, {
+        method: "GET",
         cache: "no-store",
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to load reviews.");
-      }
-
       const data: ReviewsResponse = await response.json();
 
-      if (data.success && Array.isArray(data.reviews)) {
-        setReviews(data.reviews);
-        setCurrentIndex(0);
-      } else {
-        setReviews([]);
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || "Failed to load reviews.");
       }
+
+      setReviews(Array.isArray(data.reviews) ? data.reviews : []);
+      setCurrentIndex(0);
+      setError("");
     } catch (err) {
       console.error("Reviews fetch error:", err);
       setError("Unable to load reviews. Please try again later.");
@@ -89,16 +90,17 @@ export default function Reviews() {
     }
 
     try {
-      const response = await fetch(`${API_URL}/reviews/me`, {
-        credentials: "include",
+      const response = await authenticatedFetch(`${API_URL}/reviews/me`, {
+        method: "GET",
         cache: "no-store",
       });
+
+      const data: MyReviewResponse = await response.json();
 
       if (!response.ok) {
         throw new Error("Failed to check review status.");
       }
 
-      const data: MyReviewResponse = await response.json();
       setHasReviewed(data.hasReviewed);
     } catch (err) {
       console.error("Review status error:", err);
@@ -106,12 +108,12 @@ export default function Reviews() {
   }, [isLoggedIn]);
 
   useEffect(() => {
-    fetchReviews();
+    void fetchReviews();
   }, [fetchReviews]);
 
   useEffect(() => {
     if (!sessionLoading) {
-      checkMyReview();
+      void checkMyReview();
     }
   }, [sessionLoading, checkMyReview]);
 
@@ -124,10 +126,13 @@ export default function Reviews() {
 
   // Carousel navigation
   const nextReview = () => {
+    if (reviews.length <= 1) return;
     setCurrentIndex((prev) => (prev + 1) % reviews.length);
   };
 
   const previousReview = () => {
+    if (reviews.length <= 1) return;
+
     setCurrentIndex((prev) =>
       prev === 0 ? reviews.length - 1 : prev - 1
     );
@@ -174,12 +179,11 @@ export default function Reviews() {
     try {
       setSubmitting(true);
 
-      const response = await fetch(`${API_URL}/reviews`, {
+      const response = await authenticatedFetch(`${API_URL}/reviews`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({
           rating,
           comment: comment.trim(),
@@ -195,9 +199,11 @@ export default function Reviews() {
       setMessage("Your review has been submitted successfully!");
       setComment("");
       setRating(0);
+      setHoverRating(0);
       setHasReviewed(true);
 
       await fetchReviews();
+      await checkMyReview();
     } catch (err) {
       setError(
         err instanceof Error
@@ -449,9 +455,7 @@ export default function Reviews() {
                           />
                         ) : (
                           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1c352b] text-lg font-semibold text-white">
-                            {currentReview.userName
-                              ?.charAt(0)
-                              .toUpperCase() || "U"}
+                            {currentReview.userName?.charAt(0).toUpperCase() || "U"}
                           </div>
                         )}
 

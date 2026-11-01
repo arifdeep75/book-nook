@@ -1,9 +1,11 @@
+
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authClient } from "@/lib/auth-client";
+import { authenticatedFetch } from "@/lib/authenticated-fetch";
 
 const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
@@ -20,6 +22,7 @@ type Borrow = {
 
 export default function MyBorrowsPage() {
   const { data: session, isPending } = authClient.useSession();
+  const userEmail = session?.user?.email;
 
   const [borrows, setBorrows] = useState<Borrow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,43 +37,54 @@ export default function MyBorrowsPage() {
   }, []);
 
   const fetchMyBorrows = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError("");
+    if (!userEmail) return;
 
-      const response = await fetch(`${SERVER_URL}/borrows`, {
+    const response = await authenticatedFetch(
+      `${SERVER_URL}/borrows?email=${encodeURIComponent(userEmail)}`,
+      {
         method: "GET",
-        credentials: "include",
         cache: "no-store",
-      });
-
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Failed to load borrowed books.");
       }
+    );
 
-      setBorrows(Array.isArray(result.borrows) ? result.borrows : []);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Something went wrong."
-      );
-    } finally {
-      setLoading(false);
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Failed to load borrowed books.");
     }
-  }, []);
+
+    return Array.isArray(result.borrows) ? result.borrows : [];
+  }, [userEmail]);
 
   useEffect(() => {
-    if (isPending) return;
+    if (isPending || !userEmail) return;
 
-    if (!session?.user) {
-      setBorrows([]);
-      setLoading(false);
-      return;
-    }
+    let active = true;
 
-    void fetchMyBorrows();
-  }, [isPending, session, reloadKey, fetchMyBorrows]);
+    void fetchMyBorrows()
+      .then((result) => {
+        if (active) {
+          setBorrows(result);
+          setError("");
+        }
+      })
+      .catch((err: unknown) => {
+        if (active) {
+          setError(
+            err instanceof Error ? err.message : "Something went wrong."
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [isPending, userEmail, reloadKey, fetchMyBorrows]);
 
   const handleReturn = async () => {
     if (!selectedBorrow) return;
@@ -80,11 +94,10 @@ export default function MyBorrowsPage() {
       setError("");
       setMessage("");
 
-      const response = await fetch(
+      const response = await authenticatedFetch(
         `${SERVER_URL}/borrows/${selectedBorrow._id}`,
         {
           method: "DELETE",
-          credentials: "include",
         }
       );
 
@@ -139,6 +152,19 @@ export default function MyBorrowsPage() {
           >
             Sign In
           </Link>
+        </div>
+      </main>
+    );
+  }
+
+  if (!userEmail) {
+    return (
+      <main className="flex min-h-[70vh] items-center justify-center bg-[#f8f7f2] px-5">
+        <div
+          role="alert"
+          className="max-w-md rounded-2xl bg-white p-8 text-center text-sm text-red-700 shadow-sm"
+        >
+          Unable to identify your account email. Please sign in again.
         </div>
       </main>
     );
@@ -199,7 +225,11 @@ export default function MyBorrowsPage() {
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
             <button
-              onClick={() => setReloadKey((key) => key + 1)}
+              onClick={() => {
+                setLoading(true);
+                setError("");
+                setReloadKey((key) => key + 1);
+              }}
               className="ml-3 font-bold underline"
             >
               Try again
@@ -253,6 +283,7 @@ export default function MyBorrowsPage() {
                       📖
                     </div>
                   )}
+
                   <span className="absolute right-3 top-3 rounded-full bg-[#245c45] px-3 py-1 text-xs font-semibold text-white shadow">
                     Borrowed
                   </span>
@@ -271,6 +302,7 @@ export default function MyBorrowsPage() {
                         {new Date(borrow.borrowDate).toLocaleDateString("en-GB")}
                       </span>
                     </div>
+
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm text-gray-500">Return Date</span>
                       <span className="text-sm font-semibold text-[#245c45]">
@@ -298,9 +330,11 @@ export default function MyBorrowsPage() {
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-[#edf5ed] text-3xl">
               📖
             </div>
+
             <h2 className="mt-5 text-2xl font-bold text-[#173c2d]">
               Return This Book?
             </h2>
+
             <p className="mt-3 text-sm leading-6 text-gray-500">
               Are you sure you want to return{" "}
               <span className="font-semibold text-gray-800">
@@ -317,6 +351,7 @@ export default function MyBorrowsPage() {
               >
                 Cancel
               </button>
+
               <button
                 onClick={handleReturn}
                 disabled={returning}
