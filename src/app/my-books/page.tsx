@@ -1,7 +1,7 @@
-
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { ChangeEvent, FormEvent } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { authClient } from "@/lib/auth-client";
@@ -43,6 +43,7 @@ const initialForm: BookForm = {
 
 export default function MyBooksPage() {
   const { data: session, isPending } = authClient.useSession();
+  const userEmail = session?.user?.email;
 
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,119 +58,107 @@ export default function MyBooksPage() {
   const [deletingBook, setDeletingBook] = useState<Book | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const userEmail = session?.user?.email;
-
-  // Page Title
   useEffect(() => {
     document.title = "BookNook | My Books";
   }, []);
 
-  useEffect(() => {
-    if (isPending || !userEmail) return;
-    const email = userEmail;
+  const fetchMyBooks = useCallback(async () => {
+    if (!userEmail) return;
 
-    let active = true;
+    try {
+      setLoading(true);
+      setError("");
 
-    async function fetchMyBooks() {
-      try {
-        const response = await fetch(`${SERVER_URL}/books`);
-        const result = await response.json();
+      // The public books endpoint returns the collection. The UI filters
+      // it for the signed-in contributor; update/delete ownership is enforced
+      // separately by the authenticated backend routes.
+      const response = await fetch(`${SERVER_URL}/books`, {
+        method: "GET",
+        cache: "no-store",
+      });
+      const result = await response.json();
 
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || "Failed to load books.");
-        }
-
-        const myBooks = (result.books || []).filter(
-          (book: Book) =>
-            book.contributorEmail?.toLowerCase() === email.toLowerCase()
-        );
-
-        if (active) {
-          setBooks(myBooks);
-          setError("");
-        }
-      } catch (err) {
-        if (active) {
-          setError(
-            err instanceof Error ? err.message : "Something went wrong."
-          );
-        }
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to load books.");
       }
+
+      const myBooks = (Array.isArray(result.books) ? result.books : []).filter(
+        (book: Book) =>
+          book.contributorEmail?.toLowerCase() === userEmail.toLowerCase()
+      );
+
+      setBooks(myBooks);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setLoading(false);
+    }
+  }, [userEmail]);
+
+  useEffect(() => {
+    if (isPending) return;
+
+    if (!userEmail) {
+      setBooks([]);
+      setLoading(false);
+      return;
     }
 
     void fetchMyBooks();
+  }, [isPending, userEmail, reloadKey, fetchMyBooks]);
 
-    return () => {
-      active = false;
-    };
-  }, [isPending, userEmail, reloadKey]);
-
-  // Open edit modal
   const handleEdit = (book: Book) => {
     setEditingBook(book);
     setForm({
       title: book.title,
       author: book.author,
       category: book.category,
-      image: book.image,
+      image: book.image || "",
       description: book.description,
       totalCopies: book.totalCopies,
     });
     setMessage("");
+    setError("");
   };
 
-  // Update form fields
   const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
-    >
+    event: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    const { name, value } = e.target;
-
-    setForm((prev) => ({
-      ...prev,
+    const { name, value } = event.target;
+    setForm((previous) => ({
+      ...previous,
       [name]: name === "totalCopies" ? Number(value) : value,
     }));
   };
 
-  // Update book
-  const handleUpdate = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-
+  const handleUpdate = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     if (!editingBook) return;
 
     if (form.totalCopies < 1) {
-      setMessage("Total copies must be at least 1.");
+      setError("Total copies must be at least 1.");
       return;
     }
 
     try {
       setSaving(true);
+      setError("");
       setMessage("");
 
-      const response = await fetch(
-        `${SERVER_URL}/books/${editingBook._id}`,
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify(form),
-        }
-      );
-
+      const response = await fetch(`${SERVER_URL}/books/${editingBook._id}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
       const result = await response.json();
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Failed to update book.");
       }
 
-      setBooks((prev) =>
-        prev.map((book) =>
+      setBooks((previous) =>
+        previous.map((book) =>
           book._id === editingBook._id
             ? {
                 ...book,
@@ -184,45 +173,38 @@ export default function MyBooksPage() {
       setEditingBook(null);
       setMessage("Book updated successfully!");
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Failed to update book."
-      );
+      setError(err instanceof Error ? err.message : "Failed to update book.");
     } finally {
       setSaving(false);
     }
   };
 
-  // Delete book
   const handleDelete = async () => {
     if (!deletingBook) return;
 
     try {
       setDeleting(true);
+      setError("");
       setMessage("");
 
-      const response = await fetch(
-        `${SERVER_URL}/books/${deletingBook._id}`,
-        {
-          method: "DELETE",
-        }
-      );
-
+      const response = await fetch(`${SERVER_URL}/books/${deletingBook._id}`, {
+        method: "DELETE",
+        credentials: "include",
+      });
       const result = await response.json();
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || "Failed to delete book.");
       }
 
-      setBooks((prev) =>
-        prev.filter((book) => book._id !== deletingBook._id)
+      setBooks((previous) =>
+        previous.filter((book) => book._id !== deletingBook._id)
       );
 
       setDeletingBook(null);
       setMessage("Book deleted successfully!");
     } catch (err) {
-      setMessage(
-        err instanceof Error ? err.message : "Failed to delete book."
-      );
+      setError(err instanceof Error ? err.message : "Failed to delete book.");
     } finally {
       setDeleting(false);
     }
@@ -234,7 +216,7 @@ export default function MyBooksPage() {
         <div className="text-center">
           <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-[#dce5dc] border-t-[#245c45]" />
           <p className="mt-4 text-sm font-medium text-[#52665a]">
-            Loading your books...
+            Loading your account...
           </p>
         </div>
       </main>
@@ -279,7 +261,6 @@ export default function MyBooksPage() {
   return (
     <main className="min-h-screen bg-[#f8f7f2] px-4 py-12 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        {/* Header */}
         <div className="mb-10 flex flex-col justify-between gap-5 sm:flex-row sm:items-end">
           <div>
             <p className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-[#64836e]">
@@ -292,7 +273,6 @@ export default function MyBooksPage() {
               Manage the books you have contributed to BookNook.
             </p>
           </div>
-
           <Link
             href="/add-book"
             className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#245c45] px-5 py-3 font-semibold text-white transition hover:bg-[#194632]"
@@ -302,7 +282,6 @@ export default function MyBooksPage() {
           </Link>
         </div>
 
-        {/* Message */}
         {message && (
           <div className="mb-6 flex items-center justify-between rounded-xl border border-[#d5e5d8] bg-[#edf5ed] px-5 py-3 text-sm font-medium text-[#245c45]">
             <span>{message}</span>
@@ -316,16 +295,11 @@ export default function MyBooksPage() {
           </div>
         )}
 
-        {/* Error */}
         {error && (
           <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
             <button
-              onClick={() => {
-                setError("");
-                setLoading(true);
-                setReloadKey((key) => key + 1);
-              }}
+              onClick={() => setReloadKey((key) => key + 1)}
               className="ml-3 font-bold underline"
             >
               Try again
@@ -333,7 +307,6 @@ export default function MyBooksPage() {
           </div>
         )}
 
-        {/* Book count */}
         <div className="mb-6 flex items-center justify-between">
           <p className="text-sm text-gray-500">Your contributed books</p>
           <span className="rounded-full bg-[#e5ede5] px-4 py-1.5 text-sm font-bold text-[#245c45]">
@@ -341,7 +314,6 @@ export default function MyBooksPage() {
           </span>
         </div>
 
-        {/* Empty State */}
         {books.length === 0 && !error ? (
           <div className="rounded-2xl border border-dashed border-[#cbd8cb] bg-white px-6 py-16 text-center">
             <div className="text-6xl">📚</div>
@@ -360,7 +332,6 @@ export default function MyBooksPage() {
             </Link>
           </div>
         ) : (
-          /* Books Grid */
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {books.map((book) => (
               <article
@@ -375,14 +346,13 @@ export default function MyBooksPage() {
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       unoptimized
-                      className="h-full w-full object-cover"
+                      className="object-cover"
                     />
                   ) : (
                     <div className="flex h-full items-center justify-center text-6xl">
                       📖
                     </div>
                   )}
-
                   <span className="absolute right-3 top-3 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-[#245c45] shadow">
                     {book.category}
                   </span>
@@ -392,10 +362,7 @@ export default function MyBooksPage() {
                   <h2 className="line-clamp-1 text-xl font-bold text-[#173c2d]">
                     {book.title}
                   </h2>
-                  <p className="mt-1 text-sm text-gray-500">
-                    by {book.author}
-                  </p>
-
+                  <p className="mt-1 text-sm text-gray-500">by {book.author}</p>
                   <p className="mt-4 line-clamp-2 min-h-10 text-sm leading-5 text-gray-600">
                     {book.description}
                   </p>
@@ -436,21 +403,19 @@ export default function MyBooksPage() {
         )}
       </div>
 
-      {/* Edit Modal */}
       {editingBook && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/50 p-4">
           <div className="my-auto w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl sm:p-8">
             <div className="mb-6 flex items-center justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-[#173c2d]">
-                  Edit Book
-                </h2>
+                <h2 className="text-2xl font-bold text-[#173c2d]">Edit Book</h2>
                 <p className="mt-1 text-sm text-gray-500">
                   Update your book information.
                 </p>
               </div>
               <button
                 onClick={() => setEditingBook(null)}
+                disabled={saving}
                 className="text-2xl text-gray-400 hover:text-gray-700"
                 aria-label="Close modal"
               >
@@ -485,7 +450,6 @@ export default function MyBooksPage() {
                     className="w-full rounded-lg border border-gray-200 px-4 py-3 text-sm outline-none focus:border-[#245c45]"
                   />
                 </div>
-
                 <div>
                   <label className="mb-1.5 block text-sm font-semibold text-gray-700">
                     Category
@@ -567,18 +531,15 @@ export default function MyBooksPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
       {deletingBook && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-7 text-center shadow-2xl">
             <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-50 text-3xl">
               🗑️
             </div>
-
             <h2 className="mt-5 text-2xl font-bold text-[#173c2d]">
               Delete This Book?
             </h2>
-
             <p className="mt-3 text-sm leading-6 text-gray-500">
               Are you sure you want to delete{" "}
               <span className="font-semibold text-gray-800">
@@ -586,7 +547,6 @@ export default function MyBooksPage() {
               </span>
               ? This action cannot be undone.
             </p>
-
             <div className="mt-7 flex flex-col-reverse gap-3 sm:flex-row">
               <button
                 onClick={() => setDeletingBook(null)}

@@ -1,7 +1,6 @@
-
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState, type MouseEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { authClient } from "@/lib/auth-client";
@@ -25,32 +24,34 @@ type Borrow = {
   bookId: string;
   bookTitle: string;
   bookImage: string;
-  userEmail: string;
+  userEmail?: string;
   borrowDate: string;
   returnDate: string;
 };
 
+type ApiResponse<T> = {
+  success: boolean;
+  message?: string;
+} & T;
+
 const SERVER_URL =
   process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
 
-function getTodayDate() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, "0");
-  const day = String(today.getDate()).padStart(2, "0");
-
+function formatLocalDate(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function getTodayDate() {
+  return formatLocalDate(new Date());
 }
 
 function getReturnDate() {
   const date = new Date();
   date.setDate(date.getDate() + 14);
-
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-
-  return `${year}-${month}-${day}`;
+  return formatLocalDate(date);
 }
 
 export default function BookDetailsPage() {
@@ -66,7 +67,6 @@ function BookDetailsLoading() {
     <main className="flex min-h-[70vh] items-center justify-center bg-[#f7f5ef] px-4">
       <div className="text-center">
         <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-4 border-[#1d4735] border-t-transparent" />
-
         <p className="text-sm font-medium text-[#1d4735]">
           বইয়ের তথ্য লোড হচ্ছে...
         </p>
@@ -85,28 +85,62 @@ function BookDetailsContent() {
 
   const [book, setBook] = useState<Book | null>(null);
   const [activeBorrow, setActiveBorrow] = useState<Borrow | null>(null);
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const [borrowModalOpen, setBorrowModalOpen] = useState(false);
-  const [borrowDate, setBorrowDate] = useState(getTodayDate());
-  const [returnDate, setReturnDate] = useState(getReturnDate());
+  const [borrowDate, setBorrowDate] = useState(getTodayDate);
+  const [returnDate, setReturnDate] = useState(getReturnDate);
 
   const [borrowing, setBorrowing] = useState(false);
   const [returning, setReturning] = useState(false);
-
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
-  // Dynamic Page Title
   useEffect(() => {
     document.title = book
       ? `BookNook | ${book.title}`
       : "BookNook | Book Details";
   }, [book]);
 
-  // Fetch book and user's active borrow record
+  const fetchDetails = useCallback(
+    async (signal?: AbortSignal) => {
+      const [bookResponse, borrowResponse] = await Promise.all([
+        fetch(`${SERVER_URL}/books/${bookId}`, { signal }),
+        fetch(`${SERVER_URL}/borrows`, {
+          credentials: "include",
+          cache: "no-store",
+          signal,
+        }),
+      ]);
+
+      const [bookData, borrowData] = await Promise.all([
+        bookResponse.json(),
+        borrowResponse.json(),
+      ]);
+
+      if (!bookResponse.ok || !bookData.success) {
+        throw new Error(bookData.message || "বইয়ের তথ্য লোড করা যায়নি।");
+      }
+
+      if (!borrowResponse.ok || !borrowData.success) {
+        throw new Error(
+          borrowData.message || "Borrow information লোড করা যায়নি।"
+        );
+      }
+
+      setBook(bookData.book as Book);
+
+      const borrows: Borrow[] = borrowData.borrows || [];
+      const existingBorrow =
+        borrows.find((borrow) => String(borrow.bookId) === String(bookId)) ||
+        null;
+
+      setActiveBorrow(existingBorrow);
+    },
+    [bookId]
+  );
+
   useEffect(() => {
     if (isPending) return;
 
@@ -119,70 +153,25 @@ function BookDetailsContent() {
 
     const controller = new AbortController();
 
-    async function fetchDetails() {
+    async function load() {
       try {
         setLoading(true);
         setError("");
-
-        const [bookResponse, borrowResponse] = await Promise.all([
-          fetch(`${SERVER_URL}/books/${bookId}`, {
-            signal: controller.signal,
-          }),
-          fetch(
-            `${SERVER_URL}/borrows?email=${encodeURIComponent(user?.email || "")}`,
-            {
-              signal: controller.signal,
-            }
-          ),
-        ]);
-
-        const bookData = await bookResponse.json();
-        const borrowData = await borrowResponse.json();
-
-        if (!bookResponse.ok || !bookData.success) {
-          throw new Error(
-            bookData.message || "বইয়ের তথ্য লোড করা যায়নি।"
-          );
-        }
-
-        if (!borrowResponse.ok || !borrowData.success) {
-          throw new Error(
-            borrowData.message || "Borrow information লোড করা যায়নি।"
-          );
-        }
-
-        setBook(bookData.book);
-
-        const borrows: Borrow[] = borrowData.borrows || [];
-
-        const existingBorrow = borrows.find(
-          (borrow) => String(borrow.bookId) === String(bookId)
-        );
-
-        setActiveBorrow(existingBorrow || null);
+        await fetchDetails(controller.signal);
       } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") {
-          return;
-        }
-
+        if (err instanceof Error && err.name === "AbortError") return;
         setError(
-          err instanceof Error
-            ? err.message
-            : "তথ্য লোড করতে সমস্যা হয়েছে।"
+          err instanceof Error ? err.message : "তথ্য লোড করতে সমস্যা হয়েছে।"
         );
       } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false);
-        }
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
 
-    fetchDetails();
-
+    void load();
     return () => controller.abort();
-  }, [bookId, session, isPending, router, user?.email]);
+  }, [bookId, session, isPending, router, fetchDetails]);
 
-  // Borrow book
   async function handleConfirmBorrow() {
     if (!book || !user?.email) {
       setActionError("User information পাওয়া যায়নি। আবার login করো।");
@@ -211,12 +200,10 @@ function BookDetailsContent() {
 
       const response = await fetch(`${SERVER_URL}/borrows`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookId: book._id,
-          userEmail: user.email,
           borrowDate,
           returnDate,
         }),
@@ -228,24 +215,25 @@ function BookDetailsContent() {
         throw new Error(data.message || "বই borrow করা যায়নি।");
       }
 
-      // Fetch updated borrow record to get its MongoDB ID
-      const borrowResponse = await fetch(
-        `${SERVER_URL}/borrows?email=${encodeURIComponent(user.email)}`
-      );
+      // Fetch the borrow record created by the server.
+      const borrowResponse = await fetch(`${SERVER_URL}/borrows`, {
+        credentials: "include",
+        cache: "no-store",
+      });
 
       const borrowData = await borrowResponse.json();
 
       if (!borrowResponse.ok || !borrowData.success) {
         throw new Error(
-          "Borrow হয়েছে, কিন্তু updated information পাওয়া যায়নি। পেজ refresh করো।"
+          borrowData.message ||
+            "Borrow হয়েছে, কিন্তু updated information পাওয়া যায়নি। পেজ refresh করো।"
         );
       }
 
       const borrows: Borrow[] = borrowData.borrows || [];
-
-      const newBorrow = borrows.find(
-        (borrow) => String(borrow.bookId) === String(book._id)
-      );
+      const newBorrow =
+        borrows.find((borrow) => String(borrow.bookId) === String(book._id)) ||
+        null;
 
       if (!newBorrow) {
         throw new Error(
@@ -254,15 +242,11 @@ function BookDetailsContent() {
       }
 
       setActiveBorrow(newBorrow);
-
       setBook((currentBook) =>
         currentBook
           ? {
               ...currentBook,
-              availableCopies: Math.max(
-                0,
-                currentBook.availableCopies - 1
-              ),
+              availableCopies: Math.max(0, currentBook.availableCopies - 1),
             }
           : currentBook
       );
@@ -271,16 +255,13 @@ function BookDetailsContent() {
       setSuccessMessage("বইটি সফলভাবে borrow করা হয়েছে।");
     } catch (err) {
       setActionError(
-        err instanceof Error
-          ? err.message
-          : "Borrow করতে সমস্যা হয়েছে।"
+        err instanceof Error ? err.message : "Borrow করতে সমস্যা হয়েছে।"
       );
     } finally {
       setBorrowing(false);
     }
   }
 
-  // Return book
   async function handleReturnBook() {
     if (!activeBorrow) return;
 
@@ -293,6 +274,7 @@ function BookDetailsContent() {
         `${SERVER_URL}/borrows/${activeBorrow._id}`,
         {
           method: "DELETE",
+          credentials: "include",
         }
       );
 
@@ -303,7 +285,6 @@ function BookDetailsContent() {
       }
 
       setActiveBorrow(null);
-
       setBook((currentBook) =>
         currentBook
           ? {
@@ -319,9 +300,7 @@ function BookDetailsContent() {
       setSuccessMessage("বইটি সফলভাবে return করা হয়েছে।");
     } catch (err) {
       setActionError(
-        err instanceof Error
-          ? err.message
-          : "বই return করতে সমস্যা হয়েছে।"
+        err instanceof Error ? err.message : "বই return করতে সমস্যা হয়েছে।"
       );
     } finally {
       setReturning(false);
@@ -341,15 +320,12 @@ function BookDetailsContent() {
       <main className="flex min-h-[70vh] items-center justify-center bg-[#f7f5ef] px-4">
         <div className="w-full max-w-md rounded-2xl bg-white p-8 text-center shadow-sm">
           <p className="mb-3 text-2xl">📚</p>
-
           <h1 className="mb-2 text-xl font-bold text-[#1d4735]">
             বইটি পাওয়া যায়নি
           </h1>
-
           <p className="mb-6 break-words text-sm text-gray-600">
             {error || "এই বইয়ের তথ্য পাওয়া যাচ্ছে না।"}
           </p>
-
           <Link
             href="/books"
             className="inline-flex rounded-lg bg-[#1d4735] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#153527]"
@@ -375,7 +351,6 @@ function BookDetailsContent() {
           Back to all books
         </Link>
 
-        {/* Success Message */}
         {successMessage && (
           <div
             role="status"
@@ -385,7 +360,6 @@ function BookDetailsContent() {
           </div>
         )}
 
-        {/* Error Message */}
         {actionError && !borrowModalOpen && (
           <div
             role="alert"
@@ -396,7 +370,6 @@ function BookDetailsContent() {
         )}
 
         <section className="grid gap-8 rounded-3xl bg-white p-5 shadow-sm sm:p-8 lg:grid-cols-[350px_1fr] lg:gap-12">
-          {/* Book Image */}
           <div className="flex items-start justify-center">
             <div className="w-full max-w-[280px] overflow-hidden rounded-2xl bg-[#f0eee7] shadow-md">
               {book.image ? (
@@ -413,7 +386,6 @@ function BookDetailsContent() {
             </div>
           </div>
 
-          {/* Book Information */}
           <div className="flex flex-col">
             <span className="mb-4 w-fit rounded-full bg-[#e8efe9] px-4 py-1.5 text-xs font-semibold uppercase tracking-wide text-[#1d4735]">
               {book.category}
@@ -427,39 +399,31 @@ function BookDetailsContent() {
               by <span className="font-semibold">{book.author}</span>
             </p>
 
-            {/* Copies */}
             <div className="mb-7 grid grid-cols-2 gap-3">
               <div className="rounded-xl bg-[#f7f5ef] p-4">
                 <p className="mb-1 text-xs text-gray-500">Total Copies</p>
-
                 <p className="text-2xl font-bold text-[#1d4735]">
                   {book.totalCopies}
                 </p>
               </div>
 
               <div className="rounded-xl bg-[#f7f5ef] p-4">
-                <p className="mb-1 text-xs text-gray-500">
-                  Available Copies
-                </p>
-
+                <p className="mb-1 text-xs text-gray-500">Available Copies</p>
                 <p className="text-2xl font-bold text-[#1d4735]">
                   {book.availableCopies}
                 </p>
               </div>
             </div>
 
-            {/* Description */}
             <div className="mb-7">
               <h2 className="mb-3 text-lg font-bold text-[#1d4735]">
                 About this book
               </h2>
-
               <p className="whitespace-pre-line text-sm leading-7 text-gray-600 sm:text-base">
                 {book.description || "এই বইয়ের কোনো বিবরণ দেওয়া হয়নি।"}
               </p>
             </div>
 
-            {/* Availability */}
             <div className="mb-6">
               <span
                 className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${
@@ -473,14 +437,12 @@ function BookDetailsContent() {
                     isAvailable ? "bg-green-600" : "bg-red-600"
                   }`}
                 />
-
                 {isAvailable
                   ? "Available for borrowing"
                   : "Currently unavailable"}
               </span>
             </div>
 
-            {/* Borrow / Return Buttons */}
             <div className="mb-8 flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -510,13 +472,11 @@ function BookDetailsContent() {
               )}
             </div>
 
-            {/* Borrow Information */}
             {activeBorrow && (
               <div className="mb-8 rounded-xl border border-[#e8efe9] bg-[#f7f5ef] p-4">
                 <p className="mb-2 font-semibold text-[#1d4735]">
                   You have borrowed this book.
                 </p>
-
                 <div className="grid gap-2 text-sm text-gray-600 sm:grid-cols-2">
                   <p>
                     Borrow Date:{" "}
@@ -524,7 +484,6 @@ function BookDetailsContent() {
                       {activeBorrow.borrowDate}
                     </span>
                   </p>
-
                   <p>
                     Return Date:{" "}
                     <span className="font-medium text-gray-800">
@@ -535,11 +494,9 @@ function BookDetailsContent() {
               </div>
             )}
 
-            {/* Contributor */}
             {book.contributorName && (
               <div className="mt-auto border-t border-gray-100 pt-5">
                 <p className="text-xs text-gray-500">Added by</p>
-
                 <p className="mt-1 font-semibold text-[#1d4735]">
                   {book.contributorName}
                 </p>
@@ -548,14 +505,11 @@ function BookDetailsContent() {
           </div>
         </section>
 
-        {/* Borrow Modal */}
         {borrowModalOpen && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
             onClick={() => {
-              if (!borrowing) {
-                setBorrowModalOpen(false);
-              }
+              if (!borrowing) setBorrowModalOpen(false);
             }}
           >
             <section
@@ -563,9 +517,10 @@ function BookDetailsContent() {
               aria-modal="true"
               aria-labelledby="borrow-modal-title"
               className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl sm:p-8"
-              onClick={(event) => event.stopPropagation()}
+              onClick={(event: MouseEvent<HTMLElement>) =>
+                event.stopPropagation()
+              }
             >
-              {/* Modal Header */}
               <div className="mb-6 flex items-start justify-between gap-4">
                 <div>
                   <h2
@@ -574,7 +529,6 @@ function BookDetailsContent() {
                   >
                     Borrow This Book
                   </h2>
-
                   <p className="mt-1 text-sm text-gray-500">
                     Borrowing details confirm করো।
                   </p>
@@ -591,17 +545,14 @@ function BookDetailsContent() {
                 </button>
               </div>
 
-              {/* Selected Book */}
               <div className="mb-5 rounded-xl bg-[#f7f5ef] p-4">
                 <p className="text-xs text-gray-500">Book</p>
-
                 <p className="mt-1 font-semibold text-[#1d4735]">
                   {book.title}
                 </p>
               </div>
 
               <div className="space-y-4">
-                {/* User Name */}
                 <div>
                   <label
                     htmlFor="borrow-user-name"
@@ -609,7 +560,6 @@ function BookDetailsContent() {
                   >
                     Your Name
                   </label>
-
                   <input
                     id="borrow-user-name"
                     value={user?.name || ""}
@@ -618,7 +568,6 @@ function BookDetailsContent() {
                   />
                 </div>
 
-                {/* User Email */}
                 <div>
                   <label
                     htmlFor="borrow-user-email"
@@ -626,16 +575,15 @@ function BookDetailsContent() {
                   >
                     Your Email
                   </label>
-
                   <input
                     id="borrow-user-email"
+                    type="email"
                     value={user?.email || ""}
                     readOnly
                     className="w-full rounded-lg border border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600"
                   />
                 </div>
 
-                {/* Borrow Date */}
                 <div>
                   <label
                     htmlFor="borrow-date"
@@ -643,7 +591,6 @@ function BookDetailsContent() {
                   >
                     Borrow Date
                   </label>
-
                   <input
                     id="borrow-date"
                     type="date"
@@ -654,7 +601,6 @@ function BookDetailsContent() {
                   />
                 </div>
 
-                {/* Return Date */}
                 <div>
                   <label
                     htmlFor="return-date"
@@ -662,7 +608,6 @@ function BookDetailsContent() {
                   >
                     Return Date
                   </label>
-
                   <input
                     id="return-date"
                     type="date"
@@ -674,7 +619,6 @@ function BookDetailsContent() {
                 </div>
               </div>
 
-              {/* Modal Error */}
               {actionError && (
                 <p
                   role="alert"
@@ -684,7 +628,6 @@ function BookDetailsContent() {
                 </p>
               )}
 
-              {/* Modal Actions */}
               <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <button
                   type="button"

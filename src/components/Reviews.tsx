@@ -1,19 +1,17 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
-import { authClient } from "@/lib/auth-client";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   Star,
+  Loader2,
   MessageSquare,
   Send,
-  Loader2,
-  UserRound,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
-
-const SERVER_URL =
-  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
+import { AnimatePresence, motion } from "framer-motion";
+import { useSession } from "@/lib/auth-client";
 
 interface Review {
   _id: string;
@@ -25,94 +23,164 @@ interface Review {
   createdAt: string;
 }
 
-export default function Reviews() {
-  const router = useRouter();
+interface ReviewsResponse {
+  success: boolean;
+  reviews: Review[];
+  message?: string;
+}
 
-  const { data: session, isPending } = authClient.useSession();
+interface MyReviewResponse {
+  hasReviewed: boolean;
+}
+
+const API_URL =
+  process.env.NEXT_PUBLIC_SERVER_URL || "http://localhost:5000";
+
+export default function Reviews() {
+  const { data: session, isPending: sessionLoading } = useSession();
 
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+
+  const [rating, setRating] = useState(0);
+  const [hoverRating, setHoverRating] = useState(0);
+  const [comment, setComment] = useState("");
+
+  const [hasReviewed, setHasReviewed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-
-  const [rating, setRating] = useState(5);
-  const [comment, setComment] = useState("");
-  const [hoverRating, setHoverRating] = useState(0);
-
   const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState<
-    "success" | "error" | ""
-  >("");
+  const [error, setError] = useState("");
 
-  // Fetch reviews
-  const fetchReviews = async () => {
+  const isLoggedIn = Boolean(session?.user);
+
+  // Fetch all reviews
+  const fetchReviews = useCallback(async () => {
     try {
-      setLoading(true);
-
-      const response = await fetch(`${SERVER_URL}/reviews`);
-      const data = await response.json();
+      const response = await fetch(`${API_URL}/reviews`, {
+        cache: "no-store",
+      });
 
       if (!response.ok) {
-        throw new Error(data.message || "Failed to load reviews.");
+        throw new Error("Failed to load reviews.");
       }
 
-      setReviews(data.reviews || []);
-    } catch (error) {
-      console.error("Fetch reviews error:", error);
+      const data: ReviewsResponse = await response.json();
+
+      if (data.success && Array.isArray(data.reviews)) {
+        setReviews(data.reviews);
+        setCurrentIndex(0);
+      } else {
+        setReviews([]);
+      }
+    } catch (err) {
+      console.error("Reviews fetch error:", err);
+      setError("Unable to load reviews. Please try again later.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  // Check current user's review status
+  const checkMyReview = useCallback(async () => {
+    if (!isLoggedIn) {
+      setHasReviewed(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/reviews/me`, {
+        credentials: "include",
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to check review status.");
+      }
+
+      const data: MyReviewResponse = await response.json();
+      setHasReviewed(data.hasReviewed);
+    } catch (err) {
+      console.error("Review status error:", err);
+    }
+  }, [isLoggedIn]);
 
   useEffect(() => {
     fetchReviews();
-  }, []);
+  }, [fetchReviews]);
+
+  useEffect(() => {
+    if (!sessionLoading) {
+      checkMyReview();
+    }
+  }, [sessionLoading, checkMyReview]);
 
   // Calculate average rating
   const averageRating =
     reviews.length > 0
-      ? (
-          reviews.reduce((total, review) => total + review.rating, 0) /
-          reviews.length
-        ).toFixed(1)
-      : "0.0";
+      ? reviews.reduce((total, review) => total + review.rating, 0) /
+        reviews.length
+      : 0;
 
-  // Check if current user already reviewed
-  const hasReviewed = reviews.some(
-    (review) =>
-      review.userEmail.toLowerCase() ===
-      session?.user?.email?.toLowerCase()
-  );
+  // Carousel navigation
+  const nextReview = () => {
+    setCurrentIndex((prev) => (prev + 1) % reviews.length);
+  };
+
+  const previousReview = () => {
+    setCurrentIndex((prev) =>
+      prev === 0 ? reviews.length - 1 : prev - 1
+    );
+  };
+
+  // Auto slide every 5 seconds
+  useEffect(() => {
+    if (reviews.length <= 1) return;
+
+    const interval = setInterval(() => {
+      setCurrentIndex((prev) => (prev + 1) % reviews.length);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [reviews.length]);
 
   // Submit review
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     setMessage("");
-    setMessageType("");
+    setError("");
 
-    if (!session?.user) {
-      router.push("/login");
+    if (!isLoggedIn) {
+      setError("Please sign in to submit a review.");
       return;
     }
 
-    if (comment.trim().length < 10 || comment.trim().length > 500) {
-      setMessage("Review must be between 10 and 500 characters.");
-      setMessageType("error");
+    if (rating < 1 || rating > 5) {
+      setError("Please select a rating.");
+      return;
+    }
+
+    if (!comment.trim()) {
+      setError("Please write your review.");
+      return;
+    }
+
+    if (hasReviewed) {
+      setError("You have already submitted a review.");
       return;
     }
 
     try {
       setSubmitting(true);
 
-      const response = await fetch(`${SERVER_URL}/reviews`, {
+      const response = await fetch(`${API_URL}/reviews`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        credentials: "include",
         body: JSON.stringify({
-          userName: session.user.name || "BookNook User",
-          userEmail: session.user.email,
-          userImage: session.user.image || "",
           rating,
           comment: comment.trim(),
         }),
@@ -120,354 +188,342 @@ export default function Reviews() {
 
       const data = await response.json();
 
-      if (!response.ok) {
+      if (!response.ok || !data.success) {
         throw new Error(data.message || "Failed to submit review.");
       }
 
-      setReviews((previousReviews) => [
-        data.review,
-        ...previousReviews,
-      ]);
-
+      setMessage("Your review has been submitted successfully!");
       setComment("");
-      setRating(5);
-      setMessage("Thank you! Your review has been submitted.");
-      setMessageType("success");
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong."
-      );
-      setMessageType("error");
+      setRating(0);
+      setHasReviewed(true);
 
-      // Refresh in case the review was saved despite a network error
-      fetchReviews();
+      await fetchReviews();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong. Please try again."
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  };
+  const currentReview = reviews[currentIndex];
 
   return (
-    <section className="bg-[#f8f7f2] py-20">
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        {/* Heading */}
-        <div className="mx-auto mb-12 max-w-2xl text-center">
-          <span className="mb-3 inline-block text-sm font-semibold uppercase tracking-[0.2em] text-[#64836e]">
-            Community Voices
+    <section className="py-16">
+      <div className="mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Section Heading */}
+        <div className="mb-10 text-center">
+          <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-[#dfc58d]/20 px-4 py-2 text-sm font-medium text-[#8a6b35]">
+            <MessageSquare size={16} />
+            Reader Feedback
           </span>
 
           <h2 className="text-3xl font-bold text-[#1c352b] sm:text-4xl">
-            What Our Readers Say
+            What Readers Say
           </h2>
 
-          <p className="mt-4 text-gray-600">
-            Real experiences from people who love discovering books
-            with BookNook.
+          <p className="mx-auto mt-3 max-w-xl text-sm text-gray-500 sm:text-base">
+            Discover what our readers think about their BookNook experience.
           </p>
         </div>
 
         {/* Rating Summary */}
-        <div className="mb-12 flex flex-col items-center justify-center gap-4 rounded-2xl border border-[#e8e4d9] bg-white p-7 sm:flex-row sm:gap-8">
-          <div className="text-center">
-            <h3 className="text-5xl font-bold text-[#1c352b]">
-              {averageRating}
-            </h3>
+        <div className="mb-10 rounded-2xl border border-[#dfc58d]/40 bg-[#f8f7f2] p-6 text-center">
+          <p className="text-sm font-medium text-gray-500">
+            Overall Reader Rating
+          </p>
 
-            <div className="mt-2 flex justify-center text-[#d5a84d]">
-              {[1, 2, 3, 4, 5].map((star) => (
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <span className="text-4xl font-bold text-[#1c352b]">
+              {averageRating.toFixed(1)}
+            </span>
+
+            <div className="flex gap-1">
+              {Array.from({ length: 5 }, (_, index) => (
                 <Star
-                  key={star}
-                  size={17}
-                  fill={
-                    star <= Math.round(Number(averageRating))
-                      ? "currentColor"
-                      : "none"
+                  key={index}
+                  size={20}
+                  className={
+                    index < Math.round(averageRating)
+                      ? "fill-[#dfc58d] text-[#dfc58d]"
+                      : "text-gray-300"
                   }
                 />
               ))}
             </div>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Average Rating
-            </p>
           </div>
 
-          <div className="hidden h-16 w-px bg-[#e8e4d9] sm:block" />
-
-          <div className="text-center">
-            <h3 className="text-3xl font-bold text-[#1c352b]">
-              {reviews.length}
-            </h3>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Total Reviews
-            </p>
-          </div>
+          <p className="mt-2 text-sm text-gray-500">
+            Based on {reviews.length}{" "}
+            {reviews.length === 1 ? "review" : "reviews"}
+          </p>
         </div>
 
         {/* Review Form */}
-        <div className="mb-14 rounded-2xl border border-[#e8e4d9] bg-white p-6 shadow-sm sm:p-8">
-          <div className="mb-6 flex items-center gap-3">
-            <div className="rounded-xl bg-[#eaf0e9] p-3 text-[#245c45]">
-              <MessageSquare size={22} />
-            </div>
+        {!sessionLoading && (
+          <div className="mb-12 rounded-2xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+            <h3 className="mb-5 text-xl font-semibold text-[#1c352b]">
+              Share Your Experience
+            </h3>
 
-            <div>
-              <h3 className="text-xl font-bold text-[#1c352b]">
-                Share Your Experience
-              </h3>
-
-              <p className="text-sm text-gray-500">
-                Your feedback helps our reading community grow.
+            {!isLoggedIn ? (
+              <p className="rounded-lg bg-gray-50 p-4 text-sm text-gray-600">
+                Please sign in to write a review.
               </p>
-            </div>
-          </div>
+            ) : hasReviewed ? (
+              <p className="rounded-lg bg-green-50 p-4 text-sm text-green-700">
+                Thank you! You have already submitted your review.
+              </p>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Star Rating */}
+                <div>
+                  <p className="mb-3 text-sm font-medium text-gray-700">
+                    Your Rating
+                  </p>
 
-          {isPending ? (
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              <Loader2 className="animate-spin" size={18} />
-              Checking your account...
-            </div>
-          ) : hasReviewed ? (
-            <div className="rounded-xl bg-[#eaf0e9] p-4 text-sm text-[#245c45]">
-              You have already submitted a review. Thank you for
-              sharing your experience!
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit}>
-              {/* User Info */}
-              {session?.user && (
-                <div className="mb-5 flex items-center gap-3">
-                  {session.user.image ? (
-                    <img
-                      src={session.user.image}
-                      alt={session.user.name || "User"}
-                      className="h-11 w-11 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eaf0e9] text-[#245c45]">
-                      <UserRound size={21} />
-                    </div>
-                  )}
+                  <div className="flex gap-2">
+                    {Array.from({ length: 5 }, (_, index) => {
+                      const starValue = index + 1;
 
-                  <div>
-                    <p className="font-semibold text-[#1c352b]">
-                      {session.user.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {session.user.email}
-                    </p>
+                      return (
+                        <button
+                          key={starValue}
+                          type="button"
+                          aria-label={`Rate ${starValue} out of 5`}
+                          onClick={() => setRating(starValue)}
+                          onMouseEnter={() => setHoverRating(starValue)}
+                          onMouseLeave={() => setHoverRating(0)}
+                          className="transition-transform hover:scale-110"
+                        >
+                          <Star
+                            size={28}
+                            className={
+                              starValue <= (hoverRating || rating)
+                                ? "fill-[#dfc58d] text-[#dfc58d]"
+                                : "text-gray-300"
+                            }
+                          />
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              )}
 
-              {/* Rating */}
-              <div className="mb-5">
-                <label className="mb-2 block text-sm font-semibold text-[#1c352b]">
-                  Your Rating
-                </label>
+                {/* Comment */}
+                <div>
+                  <label
+                    htmlFor="review-comment"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
+                    Your Review
+                  </label>
 
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <button
-                      key={star}
-                      type="button"
-                      onClick={() => setRating(star)}
-                      onMouseEnter={() => setHoverRating(star)}
-                      onMouseLeave={() => setHoverRating(0)}
-                      aria-label={`Rate ${star} out of 5`}
-                      className="transition-transform hover:scale-110"
-                    >
-                      <Star
-                        size={29}
-                        className={
-                          star <= (hoverRating || rating)
-                            ? "fill-[#d5a84d] text-[#d5a84d]"
-                            : "text-gray-300"
-                        }
-                      />
-                    </button>
-                  ))}
+                  <textarea
+                    id="review-comment"
+                    rows={4}
+                    value={comment}
+                    onChange={(event) => setComment(event.target.value)}
+                    placeholder="Share your thoughts about BookNook..."
+                    maxLength={1000}
+                    className="w-full resize-none rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-[#1c352b] focus:ring-2 focus:ring-[#1c352b]/10"
+                  />
+
+                  <p className="mt-1 text-right text-xs text-gray-400">
+                    {comment.length}/1000
+                  </p>
                 </div>
-              </div>
 
-              {/* Comment */}
-              <div className="mb-5">
-                <label
-                  htmlFor="review"
-                  className="mb-2 block text-sm font-semibold text-[#1c352b]"
-                >
-                  Your Review
-                </label>
-
-                <textarea
-                  id="review"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Share your experience with BookNook..."
-                  rows={4}
-                  maxLength={500}
-                  required
-                  minLength={10}
-                  className="w-full resize-none rounded-xl border border-[#e3e1d9] bg-[#fdfcf9] p-4 text-sm text-gray-700 outline-none transition focus:border-[#64836e] focus:ring-2 focus:ring-[#64836e]/20"
-                />
-
-                <p className="mt-1 text-right text-xs text-gray-400">
-                  {comment.length}/500
-                </p>
-              </div>
-
-              {/* Login Notice */}
-              {!session?.user && (
-                <p className="mb-4 text-sm text-gray-500">
-                  Please log in to submit your review.
-                </p>
-              )}
-
-              {/* Feedback */}
-              {message && (
-                <p
-                  className={`mb-4 rounded-lg p-3 text-sm ${
-                    messageType === "success"
-                      ? "bg-green-50 text-green-700"
-                      : "bg-red-50 text-red-600"
-                  }`}
-                >
-                  {message}
-                </p>
-              )}
-
-              <button
-                type="submit"
-                disabled={submitting || isPending}
-                className="inline-flex items-center gap-2 rounded-xl bg-[#1c352b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#245c45] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? (
-                  <>
-                    <Loader2 size={17} className="animate-spin" />
-                    Submitting...
-                  </>
-                ) : (
-                  <>
-                    <Send size={16} />
-                    Submit Review
-                  </>
+                {/* Error and Success */}
+                {error && (
+                  <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                    {error}
+                  </p>
                 )}
-              </button>
 
-              {!session?.user && (
+                {message && (
+                  <p className="rounded-lg bg-green-50 p-3 text-sm text-green-700">
+                    {message}
+                  </p>
+                )}
+
                 <button
-                  type="button"
-                  onClick={() => router.push("/login")}
-                  className="ml-3 text-sm font-semibold text-[#245c45] underline underline-offset-4"
+                  type="submit"
+                  disabled={submitting}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1c352b] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[#294b3c] disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                  Login first
-                </button>
-              )}
-            </form>
-          )}
-        </div>
-
-        {/* Review Cards */}
-        <div className="mb-7 flex items-center justify-between">
-          <h3 className="text-2xl font-bold text-[#1c352b]">
-            Reader Reviews
-          </h3>
-
-          <span className="text-sm text-gray-500">
-            {reviews.length} reviews
-          </span>
-        </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2
-              size={30}
-              className="animate-spin text-[#245c45]"
-            />
-          </div>
-        ) : reviews.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-[#d9d5c9] py-14 text-center">
-            <MessageSquare
-              size={35}
-              className="mx-auto mb-3 text-[#64836e]"
-            />
-
-            <h4 className="font-semibold text-[#1c352b]">
-              No reviews yet
-            </h4>
-
-            <p className="mt-2 text-sm text-gray-500">
-              Be the first to share your experience!
-            </p>
-          </div>
-        ) : (
-          <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3">
-            {reviews.map((review) => (
-              <article
-                key={review._id}
-                className="rounded-2xl border border-[#e8e4d9] bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
-              >
-                <div className="mb-5 flex items-center justify-between">
-                  <div className="flex items-center gap-1 text-[#d5a84d]">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <Star
-                        key={star}
-                        size={15}
-                        fill={
-                          star <= review.rating
-                            ? "currentColor"
-                            : "none"
-                        }
-                      />
-                    ))}
-                  </div>
-
-                  <span className="text-xs text-gray-400">
-                    {formatDate(review.createdAt)}
-                  </span>
-                </div>
-
-                <p className="mb-6 min-h-20 text-sm leading-7 text-gray-600">
-                  &ldquo;{review.comment}&rdquo;
-                </p>
-
-                <div className="flex items-center gap-3 border-t border-[#eeeae1] pt-4">
-                  {review.userImage ? (
-                    <img
-                      src={review.userImage}
-                      alt={review.userName}
-                      className="h-11 w-11 rounded-full object-cover"
-                    />
+                  {submitting ? (
+                    <>
+                      <Loader2 size={17} className="animate-spin" />
+                      Submitting...
+                    </>
                   ) : (
-                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#eaf0e9] text-[#245c45]">
-                      <UserRound size={20} />
-                    </div>
+                    <>
+                      <Send size={16} />
+                      Submit Review
+                    </>
                   )}
-
-                  <div>
-                    <h4 className="text-sm font-bold text-[#1c352b]">
-                      {review.userName}
-                    </h4>
-
-                    <p className="text-xs text-gray-500">
-                      BookNook Reader
-                    </p>
-                  </div>
-                </div>
-              </article>
-            ))}
+                </button>
+              </form>
+            )}
           </div>
         )}
+
+        {/* Reviews Carousel */}
+        <div>
+          <div className="mb-6 flex items-center justify-between">
+            <h3 className="text-xl font-semibold text-[#1c352b]">
+              Recent Reviews
+            </h3>
+
+            {reviews.length > 1 && !loading && (
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={previousReview}
+                  aria-label="Previous review"
+                  className="flex h-10 w-10 items-center justify-center rounded-full border border-gray-200 text-[#1c352b] transition hover:bg-[#1c352b] hover:text-white"
+                >
+                  <ChevronLeft size={20} />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={nextReview}
+                  aria-label="Next review"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1c352b] text-white transition hover:bg-[#294b3c]"
+                >
+                  <ChevronRight size={20} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Loader2
+                className="animate-spin text-[#1c352b]"
+                size={30}
+              />
+            </div>
+          ) : reviews.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-gray-300 py-12 text-center">
+              <MessageSquare
+                size={32}
+                className="mx-auto mb-3 text-gray-400"
+              />
+              <p className="font-medium text-gray-600">No reviews yet.</p>
+              <p className="mt-1 text-sm text-gray-400">
+                Be the first to share your experience!
+              </p>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-3xl">
+              <AnimatePresence mode="wait">
+                {currentReview && (
+                  <motion.article
+                    key={currentReview._id}
+                    initial={{ opacity: 0, x: 40 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -40 }}
+                    transition={{
+                      duration: 0.35,
+                      ease: "easeInOut",
+                    }}
+                    className="min-h-52 rounded-2xl border border-[#dfc58d]/40 bg-[#f8f7f2] p-6 shadow-sm sm:p-8"
+                  >
+                    {/* User Information */}
+                    <div className="mb-5 flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 items-center gap-3">
+                        {currentReview.userImage ? (
+                          <img
+                            src={currentReview.userImage}
+                            alt={`${currentReview.userName}'s profile`}
+                            className="h-12 w-12 shrink-0 rounded-full border border-gray-200 object-cover"
+                            onError={(event) => {
+                              event.currentTarget.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#1c352b] text-lg font-semibold text-white">
+                            {currentReview.userName
+                              ?.charAt(0)
+                              .toUpperCase() || "U"}
+                          </div>
+                        )}
+
+                        <div className="min-w-0">
+                          <h4 className="truncate font-semibold text-[#1c352b]">
+                            {currentReview.userName}
+                          </h4>
+
+                          <p className="text-xs text-gray-400">
+                            {new Date(
+                              currentReview.createdAt
+                            ).toLocaleDateString("en-US", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Rating */}
+                      <div className="flex shrink-0 gap-0.5">
+                        {Array.from({ length: 5 }, (_, index) => (
+                          <Star
+                            key={index}
+                            size={16}
+                            className={
+                              index < currentReview.rating
+                                ? "fill-[#dfc58d] text-[#dfc58d]"
+                                : "text-gray-300"
+                            }
+                          />
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Review Comment */}
+                    <p className="text-sm leading-7 text-gray-600 sm:text-base">
+                      {currentReview.comment}
+                    </p>
+                  </motion.article>
+                )}
+              </AnimatePresence>
+
+              {/* Pagination Dots */}
+              {reviews.length > 1 && (
+                <div className="mt-6 flex items-center justify-center gap-2">
+                  {reviews.map((review, index) => (
+                    <button
+                      key={review._id}
+                      type="button"
+                      onClick={() => setCurrentIndex(index)}
+                      aria-label={`Go to review ${index + 1}`}
+                      aria-current={
+                        currentIndex === index ? "true" : undefined
+                      }
+                      className={`h-2.5 rounded-full transition-all duration-300 ${
+                        currentIndex === index
+                          ? "w-7 bg-[#1c352b]"
+                          : "w-2.5 bg-gray-300 hover:bg-[#dfc58d]"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+
+              <p className="mt-3 text-center text-xs text-gray-400">
+                {currentIndex + 1} of {reviews.length} reviews
+              </p>
+            </div>
+          )}
+        </div>
       </div>
     </section>
   );

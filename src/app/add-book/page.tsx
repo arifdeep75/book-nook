@@ -39,58 +39,58 @@ export default function AddBookPage() {
 
   const user = session.user;
 
-  async function handleAddBook(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  
+async function handleAddBook(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
 
-    if (isSubmitting) return;
+  if (isSubmitting) return;
 
-    const form = event.currentTarget;
-    const formData = new FormData(form);
+  const form = event.currentTarget;
+  const formData = new FormData(form);
 
-    const bookData = {
-      title: String(formData.get("title") || "").trim(),
-      author: String(formData.get("author") || "").trim(),
-      category: String(formData.get("category") || ""),
-      image: String(formData.get("image") || "").trim(),
-      description: String(formData.get("description") || "").trim(),
-      contributorName: user.name || "",
-      contributorEmail: user.email || "",
-      totalCopies: Number(formData.get("totalCopies")),
-    };
+  const bookData = {
+    title: String(formData.get("title") || "").trim(),
+    author: String(formData.get("author") || "").trim(),
+    category: String(formData.get("category") || ""),
+    image: String(formData.get("image") || "").trim(),
+    description: String(formData.get("description") || "").trim(),
+    totalCopies: Number(formData.get("totalCopies")),
+  };
 
-    try {
-      setIsSubmitting(true);
+  try {
+    setIsSubmitting(true);
 
-      const response = await fetch(`${SERVER_URL}/books`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(bookData),
-      });
+    const response = await fetch(`${SERVER_URL}/books`, {
+      method: "POST",
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(bookData),
+    });
 
-      const result = await response.json();
+    const result = await response.json();
 
-      if (!response.ok || !result.success) {
-        throw new Error(result.message || "Could not add the book.");
-      }
-
-      toast.success("Book added successfully!");
-      form.reset();
-
-      router.push("/books");
-    } catch (error) {
-      console.error("Add book error:", error);
-
-      toast.error(
-        error instanceof Error
-          ? error.message
-          : "Something went wrong. Please try again."
-      );
-    } finally {
-      setIsSubmitting(false);
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Could not add the book.");
     }
+
+    toast.success("Book added successfully!");
+    form.reset();
+    router.push("/books");
+  } catch (error) {
+    console.error("Add book error:", error);
+
+    toast.error(
+      error instanceof Error
+        ? error.message
+        : "Something went wrong. Please try again."
+    );
+  } finally {
+    setIsSubmitting(false);
   }
+}
+
 
   return (
     <main className="mx-auto min-h-screen max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
